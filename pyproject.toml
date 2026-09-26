@@ -1,0 +1,21 @@
+[project]
+name = "closecall-agent"
+version = "0.1.0"
+description = "Agent toolkit for Technocore Close Call (close-1)"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=42"]
+license = {text = "Apache-2.0"}
+readme = "README.md"
+
+[project.scripts]
+closecall = "closecall.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["closecall"]
+
+[tool.setuptools.package-data]
+closecall = ["contest.json"]

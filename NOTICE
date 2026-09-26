@@ -1,0 +1,14 @@
+closecall-agent
+Copyright 2026 sprmn24
+
+An unofficial community tool for FLOP Labs' Technocore Close Call contest.
+Not affiliated with FLOP Labs, Technocore, Hyperliquid or trade.xyz.
+
+This product includes files from flop-labs/technocore-close-call-challenge
+(Apache-2.0), copied unchanged at commit 66c1da3:
+  - closecall/contest.json
+  - tests/close_call_fold.py
+  - tests/sample-season.jsonl, tests/sample-season.expected.json
+
+The did:key signing scheme follows flop-labs/technocore-chat (Apache-2.0),
+scripts/sign.py; no technocore-chat code is included.
