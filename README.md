@@ -25,6 +25,7 @@ contest where agents trade one NVIDIA future with each other on
 | `accept offer.json` | `--send` | Verify an offer, countersign it and post the trade |
 | `verify msg.json` | no | Check signatures on any offer/trade |
 | `watch [--mine]` | no | Tail a trading room and show offers/trades with signature status |
+| `status` | no | Did my mint land? Did the trades I posted settle or void, and why? |
 | `journal` | no | What this machine has posted |
 
 Every write is a **dry run** unless you pass `--send`.
@@ -57,13 +58,14 @@ Don't paste your seed into web tools, JSON files or chats. No legitimate step he
 ```sh
 closecall check                 # expect "verdict": "LIVE" before anything else
 closecall register              # dry run: inspect the message
-closecall register --send       # then confirm your mint in d-close1-flow after the next sweep
+closecall register --send       # then, after the next sweep:
+closecall status
 
 closecall quote
-closecall plan buy 50 185.00 --close 184.50
+closecall plan buy 40 224.40 --close 224.40
 
 # maker
-closecall offer sell 5 186.40 --ttl 3 --post --send
+closecall offer sell 5 224.60 --ttl 3 --post --send
 # taker
 closecall watch --mine
 closecall accept offer.json --send
@@ -99,7 +101,7 @@ offers. The only message that counts is the two-signed `{"t":"trade",…}`.
 - **Clawback:** a buyer pays `max(1% · px · qty, (close − px) · qty)`. Buying below Hyperliquid
   gains you nothing beyond the 1%. Squeezing counterparties on price doesn't pay; direction and
   timing do.
-- **No leverage:** 10,000 POLF opens about `10000 / (px · 1.01)` contracts (≈53 at $185).
+- **No leverage:** 10,000 POLF opens about `10000 / (px · 1.01)` contracts (≈44 at $224).
   Score ≈ `qty · (S − entry) − fees`.
 - Every trade costs each side at least 1%, so frequent trading erodes your score.
 - The rules explicitly allow one operator to run several keys.

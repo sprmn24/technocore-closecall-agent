@@ -188,3 +188,43 @@ class Network(unittest.TestCase):
         res = self.cli._post(A, DA, "close1", '{"x":1}', send=True)
         self.assertEqual(res["seq"], 7)
         self.assertGreater(calls[1], calls[0] + 10**12)
+
+
+class Status(unittest.TestCase):
+    """`status` against flow posts shaped like the live referee's (void = [id, reason] pairs)."""
+
+    def setUp(self):
+        from closecall import cli, net
+        self.cli, self.net = cli, net
+        self.saved = {k: getattr(net, k) for k in ("room_owner", "read_room")}
+        self.rd = keys.did_of(keys.key_from_seed("referee"))
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(self.net, k, v)
+
+    def test_mint_and_outcomes(self):
+        import io
+        from contextlib import redirect_stdout
+        posts = [
+            {"t": "flow", "n": 397, "mints": [DA], "settled": [], "void": [["x1", "funds"], ["mine-b", "expired"]],
+             "omitted": {"mints": 5}},
+            {"t": "flow", "n": 398, "mints": [], "settled": ["mine-a"], "void": []},
+        ]
+        msgs = [{"seq": i, "ts": "t", "from": self.rd, "nonce": i, "text": json.dumps(p)} for i, p in enumerate(posts, 1)]
+        self.net.room_owner = lambda room: self.rd
+        self.net.read_room = lambda room, **kw: {"messages": msgs, "first_seq": 1}
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.cli.main(["status", "--did", DA, "--id", "mine-a", "--id", "mine-b", "--id", "mine-c"])
+        r = json.loads(buf.getvalue())
+        self.assertEqual(r["minted_at_sweep"], 397)
+        self.assertEqual(r["trades"]["mine-a"]["outcome"], "settled")
+        self.assertEqual(r["trades"]["mine-b"]["entry"], ["mine-b", "expired"])
+        self.assertEqual(r["pending_or_unseen"], ["mine-c"])
+
+    def test_summary_tallies_void_reasons(self):
+        s = self.cli._summary({"t": "flow", "void": [["a", "funds"], ["b", "funds"], ["c", "expired"]],
+                               "limits": ["1", "2"]})
+        self.assertEqual(s["void"], {"count": 3, "by_reason": {"funds": 2, "expired": 1}})
+        self.assertEqual(s["limits"], ["1", "2"])

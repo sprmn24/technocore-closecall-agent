@@ -120,7 +120,7 @@ def cmd_check(a) -> None:
         report["manifest_matches_seed"] = report["manifest_sha256"] == seed["json"].get("package")
     for room, kind in (("d-close1-price", "price"), ("d-close1-flow", "flow")):
         m = _latest(room, kind, ref_did)
-        report["rooms"][room]["latest"] = m and {"seq": m["seq"], "ts": m["ts"], **m["json"]}
+        report["rooms"][room]["latest"] = m and {"seq": m["seq"], "ts": m["ts"], **_summary(m["json"])}
     price = report["rooms"]["d-close1-price"].get("latest")
     lag = P.sweep_now() - price["n"] if price and type(price.get("n")) is int else None
     report["price_sweep_lag"] = lag
@@ -260,6 +260,71 @@ def cmd_plan(a) -> None:
          "pnl": {str(s.quantize(Decimal("0.01"))): str(P.pnl_at(a.side, qty, px, s, fee).quantize(Decimal("0.01"))) for s in grid}})
 
 
+def _entry_id(e) -> str | None:
+    """A trade id from a flow list entry: "id", ["id", reason, ...] or {"id": ...}."""
+    if isinstance(e, str):
+        return e
+    if isinstance(e, list) and e and isinstance(e[0], str):
+        return e[0]
+    if isinstance(e, dict) and isinstance(e.get("id"), str):
+        return e["id"]
+    return None
+
+
+def _summary(post: dict) -> dict:
+    """A referee post with long lists replaced by counts (void reasons tallied)."""
+    out = {}
+    for k, v in post.items():
+        if k == "void" and isinstance(v, list):
+            reasons: dict[str, int] = {}
+            for e in v:
+                r = e[1] if isinstance(e, list) and len(e) > 1 else "?"
+                reasons[str(r)] = reasons.get(str(r), 0) + 1
+            out["void"] = {"count": len(v), "by_reason": reasons}
+        elif isinstance(v, list) and len(v) > 5 and k != "limits":
+            out[k] = {"count": len(v), "first": v[:3]}
+        else:
+            out[k] = v
+    return out
+
+
+def cmd_status(a) -> None:
+    """Did my mint land, and what happened to the trades this machine posted? Read-only."""
+    did = a.did or _me()[1]
+    referee = net.room_owner("d-close1-flow")
+    ids = set()
+    for e in state.entries():
+        try:
+            o = json.loads(e.get("text", ""))
+        except ValueError:
+            continue
+        if o.get("t") in ("offer", "trade") and isinstance(o.get("terms"), dict):
+            ids.add(o["terms"].get("id"))
+    ids |= set(a.id or [])
+    minted, outcomes, omitted = None, {}, None
+    view = net.read_room("d-close1-flow", limit=200)
+    for m in net.signed_json_messages(view):
+        post = m["json"]
+        if m["from"] != referee or post.get("t") != "flow":
+            continue
+        omitted = post.get("omitted", omitted)
+        if did in json.dumps(post.get("mints", [])):
+            minted = post.get("n")
+        for e in post.get("settled", []) or []:
+            if _entry_id(e) in ids:
+                outcomes[_entry_id(e)] = {"sweep": post.get("n"), "outcome": "settled", "entry": e}
+        for e in post.get("void", []) or []:
+            if _entry_id(e) in ids:
+                outcomes[_entry_id(e)] = {"sweep": post.get("n"), "outcome": "void", "entry": e}
+    res = {"did": did, "minted_at_sweep": minted, "flow_posts_scanned": len(view.get("messages", [])),
+           "flow_first_seq": view.get("first_seq"), "trades": outcomes,
+           "pending_or_unseen": sorted(i for i in ids if i and i not in outcomes)}
+    if minted is None:
+        res["note"] = ("mint not in the last ~200 flow posts (~16 h). If you registered just now, wait for the "
+                       "next sweep (+~30 s). The referee may also omit long lists from posts: omitted=" + json.dumps(omitted))
+    out(res)
+
+
 def cmd_journal(a) -> None:
     out(state.entries()[-a.n:])
 
@@ -327,6 +392,11 @@ def main(argv=None) -> int:
     pl.add_argument("--cash", default=str(P.MINT))
     pl.add_argument("--at", help="comma-separated closing prices S")
     pl.set_defaults(f=cmd_plan)
+
+    st = sub.add_parser("status", help="my mint and the outcome of trades I posted (read-only)")
+    st.add_argument("--did", help="check another key instead of $SIGN_SEED's")
+    st.add_argument("--id", action="append", help="also look for this trade id (repeatable)")
+    st.set_defaults(f=cmd_status)
 
     j = sub.add_parser("journal", help="what this machine has posted")
     j.add_argument("-n", type=int, default=20)
