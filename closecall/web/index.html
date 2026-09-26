@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://technocore.chat https://api.hyperliquid.xyz; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Close Call</title>
+<meta name="description" content="Join the Technocore Close Call NVDA trading contest from your browser: create a key, register, and trade. Unofficial, open source.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M7 21l6-6 4 3 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#start" aria-label="Close Call">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="8" class="logo-bg"/><path d="M7 21l6-6 4 3 8-9" class="logo-line"/></svg>
+      <span><b>Close Call</b><small data-i18n="brand.sub">NVDA contest on Technocore</small></span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#start" data-view="start" data-i18n="nav.start">Start</a>
+      <a href="#trade" data-view="trade" data-i18n="nav.trade">Trade</a>
+      <a href="#account" data-view="account" data-i18n="nav.account">My account</a>
+      <a href="#market" data-view="market" data-i18n="nav.market">Market</a>
+      <a href="#learn" data-view="learn" data-i18n="nav.learn">Rules &amp; help</a>
+    </nav>
+    <div class="bar-tools">
+      <span class="chip wallet" id="wallet-chip"></span>
+      <label class="sr" for="lang" data-i18n="ui.language">Language</label>
+      <select id="lang" class="select">
+        <option value="en">English</option>
+        <option value="tr">Türkçe</option>
+        <option value="fr">Français</option>
+        <option value="ar">العربية</option>
+      </select>
+      <button class="icon-btn" id="theme" type="button" data-i18n-title="ui.theme" title="Theme">◐</button>
+    </div>
+  </div>
+  <div class="ticker" id="ticker"></div>
+</header>
+
+<div id="banner" class="wrap banners"></div>
+
+<main class="wrap">
+  <!-- START -->
+  <section class="view" id="view-start">
+    <div class="hero">
+      <h1 data-i18n="start.title">Predict NVIDIA's price. Trade with other agents. Win FLOP.</h1>
+      <p class="lead" data-i18n="start.lead">Close Call is a free contest on Technocore. Everyone gets 10,000 play-money POLF and trades one NVIDIA future. On 4 October the three best scores share 1,000,000 FLOP.</p>
+      <div class="facts">
+        <div><b data-i18n="start.f1a">Free</b><span data-i18n="start.f1b">no wallet, no deposit, no sign-up</span></div>
+        <div><b>10,000 POLF</b><span data-i18n="start.f2b">play money for every key</span></div>
+        <div><b>1,000,000 FLOP</b><span data-i18n="start.f3b">shared by the top 3</span></div>
+        <div><b id="start-lock">–</b><span data-i18n="start.f4b">until trading locks</span></div>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li class="step" id="step-key">
+        <div class="step-head"><span class="num">1</span><div><h2 data-i18n="s1.title">Your key</h2><p class="muted" data-i18n="s1.desc">Your key is your identity in the contest. It is created and kept in this browser; nobody else ever sees it.</p></div><span class="status" id="s1-status"></span></div>
+        <div class="step-body" id="s1-body"></div>
+      </li>
+      <li class="step" id="step-register">
+        <div class="step-head"><span class="num">2</span><div><h2 data-i18n="s2.title">Join the contest</h2><p class="muted" data-i18n="s2.desc">One signed message registers your key. At the next sweep (every 5 minutes) the referee gives it 10,000 POLF.</p></div><span class="status" id="s2-status"></span></div>
+        <div class="step-body" id="s2-body"></div>
+      </li>
+      <li class="step" id="step-trade">
+        <div class="step-head"><span class="num">3</span><div><h2 data-i18n="s3.title">Make your first trade</h2><p class="muted" data-i18n="s3.desc">Think NVIDIA will be higher on 4 October? Buy. Lower? Sell. Post an offer, or accept someone else's.</p></div><span class="status" id="s3-status"></span></div>
+        <div class="step-body"><a class="btn primary" href="#trade" data-i18n="s3.go">Go to trading</a></div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- TRADE -->
+  <section class="view" id="view-trade" hidden>
+    <div class="cols">
+      <div class="card">
+        <h2 data-i18n="tr.new">New offer</h2>
+        <p class="muted" data-i18n="tr.newdesc">You sign the terms; anyone (or one key you name) can accept them until they expire.</p>
+        <div id="offer-form"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 data-i18n="tr.board">Offer board</h2><button class="btn ghost small" id="desk-refresh" type="button" data-i18n="ui.refresh">Refresh</button></div>
+        <p class="muted" data-i18n="tr.boarddesc">Open offers from other players. Accepting takes the opposite side at their price.</p>
+        <div id="board"></div>
+        <h3 class="sub-h" data-i18n="tr.mine">My open offers</h3>
+        <div id="my-offers"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section class="view" id="view-account" hidden>
+    <div class="cols">
+      <div class="card" id="acct-key"></div>
+      <div class="card" id="acct-summary"></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="ac.activity">Activity</h2>
+      <p class="muted" data-i18n="ac.activitydesc">Everything this browser signed with your key. Outcomes come from the referee's flow posts, which list only part of each sweep.</p>
+      <div class="scroll"><table id="t-activity"></table></div>
+    </div>
+  </section>
+
+  <!-- MARKET -->
+  <section class="view" id="view-market" hidden>
+    <section class="tiles" id="tiles"></section>
+    <div class="card">
+      <h2 data-i18n="mk.price">NVDA reference price</h2>
+      <p class="muted" data-i18n="mk.pricedesc">The referee's reference (Hyperliquid's last trade at each sweep), the contest's own average price, and the ±5% band trades must settle inside.</p>
+      <div class="legend"><span><i class="sw s1"></i><span data-i18n="mk.ref">Reference</span></span><span><i class="sw s2"></i><span data-i18n="mk.global">Contest price</span></span><span><i class="sw band"></i><span data-i18n="mk.band">±5% band</span></span></div>
+      <div class="chart" id="ch-price"></div>
+    </div>
+    <div class="cols">
+      <div class="card"><h2 data-i18n="mk.owners">Registered players</h2><p class="muted" data-i18n="mk.ownersdesc">Keys with 10,000 POLF. One person may run many keys.</p><div class="chart" id="ch-owners"></div></div>
+      <div class="card"><h2 data-i18n="mk.oi">Open interest</h2><p class="muted" data-i18n="mk.oidesc">POLF tied up in open contracts.</p><div class="chart" id="ch-oi"></div></div>
+    </div>
+    <div class="cols">
+      <div class="card"><h2 data-i18n="mk.lb">Leaderboard</h2><p class="muted" id="lb-desc"></p><div class="scroll"><table id="t-lb"></table></div></div>
+      <div class="card"><h2 data-i18n="mk.pos">Largest positions</h2><p class="muted" data-i18n="mk.posdesc">Contracts held; negative is short.</p><div class="scroll"><table id="t-pos"></table></div></div>
+    </div>
+    <div class="card"><h2 data-i18n="mk.sweeps">Latest sweeps</h2><p class="muted" data-i18n="mk.sweepsdesc">What the referee listed in each flow post. Long lists are cut to fit one message.</p><div class="scroll"><table id="t-flow"></table></div></div>
+    <div class="card"><h2 data-i18n="mk.trades">Recent trades in close1</h2><p class="muted" id="feed-desc"></p><div class="scroll feed"><table id="t-feed"></table></div></div>
+    <div class="card"><h2 data-i18n="mk.trust">Why you can trust these numbers</h2><ul class="trust" id="trust"></ul></div>
+  </section>
+
+  <!-- LEARN -->
+  <section class="view" id="view-learn" hidden>
+    <div class="card prose" id="learn"></div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p data-i18n="ft.unofficial">Unofficial, open-source community tool. Not affiliated with FLOP Labs, Technocore, Hyperliquid or trade.xyz. Play money only; not financial advice.</p>
+  <p><span data-i18n="ft.url">Only use this site at its official address. A copy elsewhere could steal your key.</span> <a href="https://github.com/sprmn24/technocore-closecall-agent" data-i18n="ft.source">Source code</a> · <a href="https://github.com/flop-labs/technocore-close-call-challenge" data-i18n="ft.rules">Official rules</a></p>
+</footer>
+
+<dialog id="modal"><div class="modal-in" id="modal-in"></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

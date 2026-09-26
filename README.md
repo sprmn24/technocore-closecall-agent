@@ -1,120 +1,111 @@
-# closecall-agent
+# Close Call — join the Technocore NVDA contest from your browser
 
-A small, careful command-line agent for **Technocore Close Call (`close-1`)**: the FLOP Labs
-contest where agents trade one NVIDIA future with each other on
-[technocore.chat](https://technocore.chat), settled against Hyperliquid's `xyz:NVDA`.
+**App:** https://sprmn24.github.io/technocore-closecall-agent/
 
-> **Unofficial community tool.** Not affiliated with FLOP Labs, Technocore, Hyperliquid or trade.xyz.
-> Built from the rules at
+Close Call (`close-1`) is FLOP Labs' free trading contest on [technocore.chat](https://technocore.chat).
+Every player gets 10,000 play-money POLF and trades one NVIDIA future with other players,
+settled against Hyperliquid's `xyz:NVDA`. The three best scores share 1,000,000 FLOP.
+
+This repository gives anyone a way in, including people who have never touched Technocore:
+
+- **A web app**: create or import a key, register, and trade from the browser. It comes in
+  English, Türkçe, Français and العربية.
+- **A command-line agent** for automation and power users.
+
+> **Unofficial community tool.** Not affiliated with FLOP Labs, Technocore, Hyperliquid or
+> trade.xyz. Built on the rules at
 > [flop-labs/technocore-close-call-challenge@66c1da3](https://github.com/flop-labs/technocore-close-call-challenge/tree/66c1da3),
-> which were still marked **draft** when this was written. Always run `closecall check` first.
-> Nothing here is financial advice.
+> the package the live referee's seed pins (`bae09812…6dafa`). Play money only; not financial advice.
 
-## What it does
+## Web app
 
-| Command | Writes? | Purpose |
-|---|---|---|
-| `did` | no | Print your `did:key` |
-| `check [--rev <commit>]` | no | Are all five referee rooms owned by one key? Is there a seed? Are price posts fresh? Optional: compare the seed's package hash with `manifest.json` at a commit |
-| `clock` | no | Current sweep, next sweep, lock (sweep 2556 = 4 Oct 09:00 UTC) |
-| `quote` | no | Hyperliquid last `xyz:NVDA` trade + referee reference and 5% band |
-| `plan side qty px` | no | Fee, collateral, break-even and PnL across closing prices |
-| `register` | `--send` | Post the owner message (10,000 POLF mint at the next sweep) |
-| `register-room name` | `--send` | Register another room for trading |
-| `offer side qty px` | `--post --send` | Sign terms as maker; optionally publish the signed offer |
-| `accept offer.json` | `--send` | Verify an offer, countersign it and post the trade |
-| `verify msg.json` | no | Check signatures on any offer/trade |
-| `watch [--mine]` | no | Tail a trading room and show offers/trades with signature status |
-| `status` | no | Did my mint land? Did the trades I posted settle or void, and why? |
-| `journal` | no | What this machine has posted |
+| Tab | What it does |
+|---|---|
+| **Start** | Three steps: create a key (or import your existing seed), register, make a first trade |
+| **Trade** | Publish a signed offer (buy/sell, price, size, validity) with fee, collateral, break-even and P&L scenarios; browse the offer board and accept other players' offers |
+| **My account** | Your key (backup, lock, remove), an estimated position and P&L, and every message you signed with its referee outcome |
+| **Market** | Live NVIDIA reference and ±5% band, players, open interest, leaderboard, largest positions, sweeps, recent trades with verified signatures |
+| **Rules & help** | The game in plain language and an FAQ |
 
-Every write is a **dry run** unless you pass `--send`.
+### How it is built, and why you can trust it
 
-## Install
+- **No server.** The page is static and runs on GitHub Pages. Your browser talks to
+  `technocore.chat` and `api.hyperliquid.xyz` directly and checks every signature itself.
+- **Your key never leaves your browser.** It is generated with WebCrypto, used for Ed25519
+  signing, and stored encrypted in `localStorage` (PBKDF2-SHA256 with 600k iterations, then
+  AES-GCM). The encryption password never leaves the page. You must save a backup before you continue.
+- **Locked down.** The Content-Security-Policy allows scripts only from the site itself and
+  network requests only to technocore.chat and Hyperliquid. Every string from the network is
+  rendered as text, never as HTML.
+- **Same keys everywhere.** A seed is 64 hex characters or a passphrase (SHA-256'd). This is
+  byte-compatible with technocore-chat's `scripts/sign.py` and with the CLI below. The tests
+  check the browser against the same golden vectors and against a real trade captured from `close1`.
 
-Python 3.10+.
+Only use the app at its official address. A copy hosted elsewhere could steal keys.
 
-```sh
-git clone https://github.com/<you>/technocore-closecall-agent
-cd technocore-closecall-agent
-pip install -e .            # or: uv venv && uv pip install -e .
-```
+### The offer board
 
-## Your key
-
-The seed is read from `$SIGN_SEED` or a hidden prompt and is **never written to disk**. Seed
-rules are byte-identical to technocore-chat's `scripts/sign.py` (64 hex chars = raw seed, anything
-else is SHA-256'd), which the tests check against golden vectors.
-
-```sh
-read -rsp "Seed: " SIGN_SEED; export SIGN_SEED; echo
-closecall did
-```
-
-Don't paste your seed into web tools, JSON files or chats. No legitimate step here needs that.
-
-## Playing
-
-```sh
-closecall check                 # expect "verdict": "LIVE" before anything else
-closecall register              # dry run: inspect the message
-closecall register --send       # then, after the next sweep:
-closecall status
-
-closecall quote
-closecall plan buy 40 224.40 --close 224.40
-
-# maker
-closecall offer sell 5 224.60 --ttl 3 --post --send
-# taker
-closecall watch --mine
-closecall accept offer.json --send
-```
-
-A trade counts only once the referee's `d-close1-flow` says it settled.
-
-### Offer convention
-
-The rules leave negotiation open. `offer --post` publishes:
+The contest has no order book. The app publishes signed offers to the `closecall-desk` room:
 
 ```json
 {"t":"offer","season":"close-1","terms":{…},"maker_sig":"…"}
 ```
 
-The referee ignores this shape. It's there so agents can find and accept each other's signed
-offers. The only message that counts is the two-signed `{"t":"trade",…}`.
+The referee ignores this room, so an offer there never counts on its own. When someone accepts
+an offer, the two-signed `{"t":"trade",…}` goes to `close1`, where it counts. A copy also goes
+to the desk so the maker sees the fill. The CLI uses the same room, so web and CLI users can
+trade with each other.
 
-## Guard rails
+### Limits worth knowing
 
-- Terms have exactly the seven keys, sorted and compact, and pass the fold's own `shape` rules.
-- `accept` refuses: a bad maker signature, your own offer (a self-trade pays both fees for nothing),
-  an offer addressed to another key, an expired `until`, anything after the lock, a price outside
-  the referee's 5% band.
-- `offer` refuses prices outside the band and defaults to a 3-sweep (~15 min) life, so a stale
-  `"any"` offer can't be picked off hours later.
-- Nonces are `max(ms clock, last+1)` under a file lock, so several agents can share one key. On
-  "not greater than N" the tool moves past N and retries once.
-- Fee maths is identical to `close_call_fold.py` (tested against it).
+- The referee's public flow posts are cut to fit one message, so they don't list every mint or
+  settlement. "My account" shows an estimate built from the trades you signed. The referee's
+  ledger is the final word.
+- A published offer cannot be withdrawn before it expires. Keep validity short when the price moves fast.
+- The app depends on technocore.chat answering browser requests from other sites, which it does
+  today. If that changes, the CLI keeps working.
 
-## Things the rules imply
+### Run it locally
 
-- **Clawback:** a buyer pays `max(1% · px · qty, (close − px) · qty)`. Buying below Hyperliquid
-  gains you nothing beyond the 1%. Squeezing counterparties on price doesn't pay; direction and
-  timing do.
-- **No leverage:** 10,000 POLF opens about `10000 / (px · 1.01)` contracts (≈44 at $224).
-  Score ≈ `qty · (S − entry) − fees`.
-- Every trade costs each side at least 1%, so frequent trading erodes your score.
-- The rules explicitly allow one operator to run several keys.
+```sh
+pip install -e .
+closecall web            # http://127.0.0.1:8787
+```
+
+## Command-line agent
+
+```sh
+pip install -e .
+read -rsp "Seed: " SIGN_SEED; export SIGN_SEED; echo
+closecall check          # referee rooms, seed, price feed → "LIVE"
+closecall register --send
+closecall quote
+closecall plan buy 40 224.40
+closecall offer sell 5 224.60 --post --send      # to closecall-desk
+closecall watch --mine                           # offers/trades on the desk
+closecall accept offer.json --send               # trade to close1 (+ copy to the desk)
+closecall status                                 # mint and trade outcomes, where listed
+```
+
+Every write is a dry run unless you pass `--send`. The seed is read from `$SIGN_SEED` or a
+hidden prompt and is never written to disk.
 
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests -v
-SIGN_PY=../technocore-chat/scripts/sign.py python3 -m unittest discover -s tests   # live cross-check
+python3 -m unittest discover -s tests -v        # Python: protocol, signing, fees vs the fold, network mocks
+node tests/web/core.test.mjs                    # browser core: golden vectors, live trade, fees, vault
+node tests/web/i18n.test.mjs                    # every UI string in all four languages
 ```
 
+`.github/workflows/pages.yml` publishes `closecall/web` to GitHub Pages on every push to `main`
+(Settings → Pages → Source: GitHub Actions).
+
 `tests/close_call_fold.py` and `closecall/contest.json` are copied unchanged from the contest
-package (Apache-2.0). See NOTICE.
+package (Apache-2.0); see NOTICE.
+
+The CSP in `closecall/web/index.html` is what keeps the page from talking to anything but
+technocore.chat and Hyperliquid, so any change that widens it needs a stated reason.
 
 ## License
 
@@ -122,10 +113,12 @@ Apache-2.0.
 
 ---
 
-## Türkçe özet
+## Türkçe
 
-Technocore **Close Call** yarışması için gayriresmî bir komut satırı ajanı. Anahtar yönetimi, kayıt,
-teklif/kabul, imza doğrulama, hakem kontrolü ve ücret/PnL planlaması yapar. Seed diske yazılmaz.
-Yazma işlemi yapan her komut `--send` verilmedikçe deneme modunda çalışır. İlk adım her zaman
-`closecall check`: `"LIVE"` görmeden kayıt olma. Kurallar yazıldığı sırada hâlâ "draft" durumundaydı.
-Bu bir yatırım tavsiyesi değildir.
+**Uygulama:** https://sprmn24.github.io/technocore-closecall-agent/
+
+Technocore **Close Call** yarışmasına tarayıcıdan katılmak için gayriresmî ve açık kaynak bir araç.
+Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: anahtar oluştur (ya da mevcut
+seed'ini içe aktar), tek tıkla kayıt ol, teklif ver veya bir teklifi kabul et. Arayüz Türkçe,
+İngilizce, Fransızca ve Arapça. Anahtarın tarayıcından hiç çıkmaz ve şifrenle şifrelenerek
+saklanır. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.

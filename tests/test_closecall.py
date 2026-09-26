@@ -228,3 +228,13 @@ class Status(unittest.TestCase):
                                "limits": ["1", "2"]})
         self.assertEqual(s["void"], {"count": 3, "by_reason": {"funds": 2, "expired": 1}})
         self.assertEqual(s["limits"], ["1", "2"])
+
+
+class LiveVector(unittest.TestCase):
+    """A third party's trade captured from close1 (seq 3011939, sweep ~401): our canonical terms must match theirs."""
+
+    def test_real_trade_verifies_and_tamper_fails(self):
+        obj = json.loads((Path(__file__).parent / "live_trade_close1_seq3011939.json").read_text())
+        self.assertIsNone(P.check_trade(obj))
+        obj["terms"]["qty"] = "44.00"
+        self.assertEqual(P.check_trade(obj), "maker signature does not verify")

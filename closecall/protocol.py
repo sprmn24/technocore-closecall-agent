@@ -25,7 +25,12 @@ MIN_QTY = Decimal(CONTEST["min_qty"])
 WINDOW = Decimal(CONTEST["limit_window"])
 FEE_RATE = Decimal(CONTEST["fee_rate"])
 TRADING_ROOM = CONTEST["rooms"]["trading"][0]
+# Offers are published here (by the web app and `offer --post`). It is not a registered trading
+# room, so the referee ignores everything in it; final two-signed trades go to TRADING_ROOM.
+DESK_ROOM = "closecall-desk"
 REFEREE_ROOMS = CONTEST["rooms"]["referee"]
+# sha256 of manifest.json at 66c1da3, the package this toolkit implements; the live seed names it.
+PACKAGE_SHA256 = "bae09812e25eb6f1369c611f24964f7ea0acafddfc45301a16f33f941296dafa"
 
 TRADE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 TWO_PLACES = re.compile(r"[0-9]{1,7}(\.[0-9]{1,2})?")

@@ -203,7 +203,13 @@ def cmd_accept(a) -> None:
     tsig = keys.sign(key, P.taker_payload(t, did))
     trade = P.trade_msg(t, did, offer["maker_sig"], tsig)
     assert P.check_trade(json.loads(trade)) is None
-    out({"trade": json.loads(trade), "economics": info, "post": _post(key, did, a.room, trade, a.send)})
+    res = {"trade": json.loads(trade), "economics": info, "post": _post(key, did, a.room, trade, a.send)}
+    if a.send and a.room != P.DESK_ROOM:
+        try:  # best effort: lets the maker see the fill on the offer board; the referee ignores this room
+            _post(key, did, P.DESK_ROOM, trade, True)
+        except SystemExit:
+            pass
+    out(res)
 
 
 def cmd_verify(a) -> None:
@@ -325,6 +331,11 @@ def cmd_status(a) -> None:
     out(res)
 
 
+def cmd_web(a) -> None:
+    from . import explorer
+    explorer.serve(a.port)
+
+
 def cmd_journal(a) -> None:
     out(state.entries()[-a.n:])
 
@@ -360,7 +371,7 @@ def main(argv=None) -> int:
     o.add_argument("--until", type=int, help="explicit last sweep (overrides --ttl)")
     o.add_argument("--id")
     o.add_argument("--post", action="store_true", help="publish the signed offer in --room")
-    o.add_argument("--room", default=P.TRADING_ROOM)
+    o.add_argument("--room", default=P.DESK_ROOM, help=f"where offers are published (default {P.DESK_ROOM}, shared with the web app)")
     o.add_argument("--send", action="store_true")
     o.add_argument("--offline", action="store_true", help="skip the referee limit check")
     o.set_defaults(f=cmd_offer)
@@ -377,7 +388,7 @@ def main(argv=None) -> int:
     v.set_defaults(f=cmd_verify)
 
     w = sub.add_parser("watch", help="tail a trading room for offers/trades")
-    w.add_argument("--room", default=P.TRADING_ROOM)
+    w.add_argument("--room", default=P.DESK_ROOM)
     w.add_argument("--since", type=int)
     w.add_argument("--back", type=int, default=200)
     w.add_argument("--mine", action="store_true", help="only offers open to me or naming me")
@@ -397,6 +408,10 @@ def main(argv=None) -> int:
     st.add_argument("--did", help="check another key instead of $SIGN_SEED's")
     st.add_argument("--id", action="append", help="also look for this trade id (repeatable)")
     st.set_defaults(f=cmd_status)
+
+    ex = sub.add_parser("web", help="run the browser app locally on 127.0.0.1")
+    ex.add_argument("--port", type=int, default=8787)
+    ex.set_defaults(f=cmd_web)
 
     j = sub.add_parser("journal", help="what this machine has posted")
     j.add_argument("-n", type=int, default=20)
