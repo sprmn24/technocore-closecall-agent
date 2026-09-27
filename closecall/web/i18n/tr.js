@@ -426,5 +426,8 @@ export default {
  "sh.go": "Anahtarımı yükle",
  "sh.done": "Anahtar yüklendi. Artık burada tek tıkla imzalarsın.",
  "sh.startbtn": "Burada imzala: anahtarımı yükle",
- "sh.later": "İstersen daha sonra anahtarını bu tarayıcıya yükleyip burada tek tıkla da imzalayabilirsin."
+ "sh.later": "İstersen daha sonra anahtarını bu tarayıcıya yükleyip burada tek tıkla da imzalayabilirsin.",
+ "bal.unknown": "Bu tarayıcıda bu DID'in kaydına dair bir iz yok. Hakem kimin kayıt olduğunu yayınlamıyor; site yalnızca burada imzalananları bilir. DID'ini zaten kaydettiysen (başka bir cihazda, başka bir adreste ya da terminalde) aşağıdan işaretle, bakiyen görünsün.",
+ "bal.grantassumed": "Hakemden +10.000 POLF. Bu DID'in işlemleri var, yani kayıtlı; kayıt bu tarayıcının dışında yapılmış.",
+ "dm.registered": "Bu DID yarışmaya zaten kayıtlı (terminalimden ya da başka bir cihazdan)"
 };

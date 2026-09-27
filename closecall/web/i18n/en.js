@@ -426,5 +426,8 @@ export default {
  "sh.go": "Load my key",
  "sh.done": "Key loaded. You now sign here with one click.",
  "sh.startbtn": "Sign here instead: load my key",
- "sh.later": "You can also load your key into this browser later, to sign here with one click."
+ "sh.later": "You can also load your key into this browser later, to sign here with one click.",
+ "bal.unknown": "This browser has no record of this DID's registration. The referee doesn't publish who registered, so the site only knows what was signed here. If you already registered it (on another device, at another address or in your terminal), mark it below and your balance appears.",
+ "bal.grantassumed": "+10,000 POLF from the referee. This DID has trades, so it is registered; it was registered outside this browser.",
+ "dm.registered": "This DID is already registered for the contest (in my terminal or on another device)"
 };

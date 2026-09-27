@@ -120,7 +120,10 @@ function journalAdd(e) {
   } else j.push({ ts: Date.now(), ...e });
   try { localStorage.setItem(jKey(), JSON.stringify(j.slice(-500))); } catch { /* full */ }
 }
-const registered = () => journal().some((e) => e.kind === "owner");
+// The referee publishes no list of registered keys, so registration is what this browser knows:
+// its own owner message, the person saying so, or a trade under this key (trades from keys that
+// never registered are void, so a key that trades has registered).
+const registered = () => journal().some((e) => e.kind === "owner" || e.kind === "trade");
 const myDid = () => (S.signer ? S.signer.did : S.vault ? S.vault.did : S.watchDid);
 
 // ---- key management ----------------------------------------------------------------------
@@ -270,12 +273,15 @@ function setWatch(did) { try { did ? localStorage.setItem(DM_KEY, did) : localSt
 async function haveDidFlow() {
   const ok = await modal((close) => {
     const inp = el("input", { class: "input mono", placeholder: "did:key:z6Mk…", autocomplete: "off", spellcheck: "false" });
+    const reg = el("input", { type: "checkbox" });
     const err = el("p", { class: "hint bad" });
     const go = el("button", { class: "btn primary", type: "button" }, t("dm.go"));
     const submit = () => {
       const v = C.normalizeDid(inp.value);
       if (!C.DID_RE.test(v)) { err.textContent = t("dm.bad"); return; }
-      setWatch(v); close(true);
+      setWatch(v);
+      if (reg.checked) journalAdd({ kind: "owner", room: "elsewhere" });
+      close(true);
     };
     go.addEventListener("click", submit);
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
@@ -283,6 +289,7 @@ async function haveDidFlow() {
       el("h2", {}, t("dm.title")),
       el("p", { class: "muted" }, t("dm.desc")),
       el("div", { class: "field" }, el("label", {}, t("dm.input")), inp),
+      el("label", { class: "check" }, reg, el("span", {}, t("dm.registered"))),
       el("div", { class: "callout info" }, t("dm.how"), " ", t("sh.later")),
       err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
@@ -559,7 +566,7 @@ async function loadDesk() {
         if (m.from !== o.terms?.maker) continue; // posted by someone else than the maker: ignore
         if ((await C.checkOffer(o)) === null) {
           offers.push({ ...o, seq: m.seq, ts: m.ts });
-          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "offer", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, maker_sig: o.maker_sig, role: "maker" });
+          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "offer", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, terms: o.terms, maker_sig: o.maker_sig, role: "maker" });
         }
       }
     }
@@ -939,8 +946,8 @@ const entrySweep = (e) => e.sweep ?? C.nextSweep(e.at ?? e.ts);
 
 /** When the referee's 10,000 POLF arrives, from this browser's registration entry. */
 function grantInfo() {
-  const e = journal().find((x) => x.kind === "owner");
-  if (!e) return null;
+  const j = journal(), e = j.find((x) => x.kind === "owner");
+  if (!e) return j.some((x) => x.kind === "trade") ? { sweep: null, at: null, done: true, assumed: true } : null;
   const sweep = e.room === "elsewhere" && e.sweep == null ? null : entrySweep(e);
   return { sweep, at: e.at ?? e.ts, done: sweep == null || lastSweepDone() >= sweep };
 }
@@ -974,7 +981,7 @@ function accountBook() {
     if (!qC || !pC) continue;
     const f = S.flowIndex.get(e.id);
     let status = f ? f.outcome : it.sweep > done ? "pending" : "assumed", reason = f ? f.reason : null;
-    if (status !== "void" && (!g || (g.sweep != null && it.sweep < g.sweep))) { status = "void"; reason = "not_owner"; }
+    if (status !== "void" && g && g.sweep != null && it.sweep < g.sweep) { status = "void"; reason = "not_owner"; }
     const row = { kind: "trade", at: it.at, sweep: it.sweep, id: e.id, side: mySide, qty: e.terms.qty, px: e.terms.px, status, reason, n: f && f.n, delta: 0n, fee: 0n };
     if (status !== "void") {
       const before = cash, fee = qC * pC / 100n;
@@ -1037,12 +1044,18 @@ function renderBalance(B) {
   box.append(el("h2", {}, t("bal.title")), el("p", { class: "muted" }, t("bal.desc")));
   const g = B.grant;
   if (!g) {
-    box.append(el("div", { class: "callout info" }, t("bal.grantnone"), " ", el("a", { href: "#start" }, t("nav.start"))));
+    // This browser has no registration on record. The referee publishes no per-key list, so a DID
+    // registered on another device, another address or in the terminal looks the same as a new one.
+    const known = journal().length > 0;
+    box.append(el("div", { class: "callout " + (known ? "warn" : "info") }, known ? t("bal.unknown") : t("bal.grantnone")),
+      el("div", { class: "row" },
+        el("button", { class: "btn primary", type: "button", onclick: () => { journalAdd({ kind: "owner", room: "elsewhere" }); renderAll(); } }, t("s2.already")),
+        el("a", { class: "btn", href: "#start" }, t("s2.go"))));
     return;
   }
   const when = g.sweep != null ? utc(C.sweepTime(g.sweep)) : "";
   box.append(el("div", { class: "callout " + (g.done ? "good" : "warn") + " bal-grant" },
-    g.sweep == null ? t("bal.grantmarked")
+    g.assumed ? t("bal.grantassumed") : g.sweep == null ? t("bal.grantmarked")
       : g.done ? t("bal.grantdone", { n: g.sweep, time: when })
         : t("bal.grantpending", { n: g.sweep, time: when, left: dur(C.sweepTime(g.sweep) - Date.now()) })));
   const pos = Number(B.pos) / 100, r = refC();
@@ -1104,7 +1117,7 @@ function renderAccount() {
       el("div", {}, el("span", {}, t("ac.avg")), el("span", { class: "num" }, L.avg != null ? "$" + C.fromCents(L.avg) : "–")),
       el("div", {}, el("span", {}, t("ac.pnl")), el("span", { class: "num " + (L.pnl > 0n ? "buy-t" : L.pnl < 0n ? "sell-t" : "") }, L.pnl != null ? polf(L.pnl, true) + " POLF" : "–"))));
 
-  const rows = journal().slice().reverse();
+  const rows = journal().map((e, i) => [e, i]).sort((a, b) => ((b[0].at ?? b[0].ts) - (a[0].at ?? a[0].ts)) || b[1] - a[1]).map(([e]) => e);
   const tb = clear($("t-activity"));
   tb.append(el("thead", {}, el("tr", {}, [t("ac.time"), t("ac.what"), t("tr.side"), t("tr.qty"), t("tr.price"), t("tr.status")].map((h, i) => el("th", { class: i === 3 || i === 4 ? "r" : null }, h)))));
   const body = el("tbody");
@@ -1114,7 +1127,7 @@ function renderAccount() {
     const what = e.kind === "owner" ? t("ac.k.owner") : e.kind === "offer" ? t("ac.k.offer") : e.role === "maker" ? t("ac.k.filled") : t("ac.k.accepted");
     const booked = e.kind === "trade" ? L.rows.find((r) => r.kind === "trade" && r.id === e.id) : null;
     const status = e.kind === "trade" ? (booked ? balanceStatus(booked) : tradeStatus(e)) : e.kind === "offer" ? (S.desk.filled.has(e.id) ? el("span", { class: "badge ok" }, t("st.filled")) : C.nextSweep() > e.terms.until ? el("span", { class: "badge neutral" }, t("st.expired")) : el("span", { class: "badge warn" }, t("st.open"))) : el("span", { class: "badge ok" }, t("st.posted"));
-    body.append(el("tr", {}, el("td", { class: "num" }, utcFull(e.ts)), el("td", {}, what),
+    body.append(el("tr", {}, el("td", { class: "num" }, utcFull(e.at ?? e.ts)), el("td", {}, what),
       el("td", {}, mySide ? el("span", { class: mySide + "-t" }, mySide === "buy" ? t("tr.buy") : t("tr.sell")) : "–"),
       el("td", { class: "r num" }, e.terms ? e.terms.qty : "–"), el("td", { class: "r num" }, e.terms ? e.terms.px : "–"), el("td", {}, status)));
   }

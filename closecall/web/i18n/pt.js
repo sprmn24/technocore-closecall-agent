@@ -426,5 +426,8 @@ export default {
  "sh.go": "Carregar minha chave",
  "sh.done": "Chave carregada. Agora você assina aqui com um clique.",
  "sh.startbtn": "Assinar aqui: carregar minha chave",
- "sh.later": "Você também pode carregar sua chave neste navegador depois, para assinar aqui com um clique."
+ "sh.later": "Você também pode carregar sua chave neste navegador depois, para assinar aqui com um clique.",
+ "bal.unknown": "Este navegador não tem registro da inscrição deste DID. O árbitro não publica quem se registrou, então o site só sabe o que foi assinado aqui. Se você já o registrou (em outro aparelho, em outro endereço ou no terminal), marque abaixo e seu saldo aparece.",
+ "bal.grantassumed": "+10.000 POLF do árbitro. Este DID tem negociações, então está registrado; o registro foi feito fora deste navegador.",
+ "dm.registered": "Este DID já está registrado no concurso (no meu terminal ou em outro aparelho)"
 };

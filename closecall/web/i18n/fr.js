@@ -426,5 +426,8 @@ export default {
  "sh.go": "Charger ma clé",
  "sh.done": "Clé chargée. Vous signez désormais ici en un clic.",
  "sh.startbtn": "Signer ici plutôt : charger ma clé",
- "sh.later": "Vous pourrez aussi charger votre clé dans ce navigateur plus tard, pour signer ici en un clic."
+ "sh.later": "Vous pourrez aussi charger votre clé dans ce navigateur plus tard, pour signer ici en un clic.",
+ "bal.unknown": "Ce navigateur n'a aucune trace de l'inscription de ce DID. L'arbitre ne publie pas qui s'est inscrit : le site ne connaît que ce qui a été signé ici. Si vous l'avez déjà inscrit (sur un autre appareil, à une autre adresse ou dans votre terminal), indiquez-le ci-dessous et votre solde apparaîtra.",
+ "bal.grantassumed": "+10 000 POLF de l'arbitre. Ce DID a des échanges, il est donc inscrit ; l'inscription a été faite hors de ce navigateur.",
+ "dm.registered": "Ce DID est déjà inscrit au concours (dans mon terminal ou sur un autre appareil)"
 };
