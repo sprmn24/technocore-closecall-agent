@@ -111,8 +111,12 @@ const jKey = () => `cc-journal:${myDid() || "-"}`;
 function journal() { try { return JSON.parse(localStorage.getItem(jKey()) || "[]"); } catch { return []; } }
 function journalAdd(e) {
   const j = journal();
-  if (e.id && j.some((x) => x.kind === e.kind && x.id === e.id && x.role === e.role)) return;
-  j.push({ ts: Date.now(), ...e });
+  const had = e.id ? j.find((x) => x.kind === e.kind && x.id === e.id && x.role === e.role) : null;
+  if (had) {
+    // entries saved before stamps were recorded: take the room's stamp and sweep once it is seen
+    if (had.at != null || e.at == null) return;
+    had.at = e.at; had.sweep = C.nextSweep(e.at);
+  } else j.push({ ts: Date.now(), ...e });
   try { localStorage.setItem(jKey(), JSON.stringify(j.slice(-500))); } catch { /* full */ }
 }
 const registered = () => journal().some((e) => e.kind === "owner");
@@ -512,8 +516,8 @@ async function loadDesk() {
       if (o.t === "trade" && o.terms && typeof o.terms.id === "string") {
         if ((await C.checkTrade(o)) === null) {
           filled.add(o.terms.id);
-          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, terms: o.terms, taker: o.taker, role: "maker" });
-          if (myDid() && o.taker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, terms: o.terms, taker: o.taker, role: "taker" });
+          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, sweep: C.nextSweep(Date.parse(m.ts) || Date.now()), terms: o.terms, taker: o.taker, role: "maker" });
+          if (myDid() && o.taker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, sweep: C.nextSweep(Date.parse(m.ts) || Date.now()), terms: o.terms, taker: o.taker, role: "taker" });
         }
       } else if (o.t === "offer") {
         if (m.from !== o.terms?.maker) continue; // posted by someone else than the maker: ignore
