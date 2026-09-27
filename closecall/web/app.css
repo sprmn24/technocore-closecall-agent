@@ -306,9 +306,10 @@ details.group summary { cursor: pointer; color: var(--text); }
 #t-statement tr.off td { opacity: .55; }
 #acct-balance h3 { margin: 18px 0 2px; font-size: 15px; }
 @media (max-width: 720px) { .chip-bal { display: none; } }
-@media (max-width: 1400px) {
-  .wallet:has(.chip-bal) .did, .wallet:has(.chip-bal) .term-badge { display: none; }
-  .wallet .chip-bal { border: 0; padding: 0; }
+.chip-did .ds { display: none; }
+@media (max-width: 1240px) {
+  .wallet:has(.chip-bal) .chip-did .dl { display: none; }
+  .wallet:has(.chip-bal) .chip-did .ds { display: inline; }
 }
 @media (max-width: 720px) {
   .bal-tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -316,3 +317,6 @@ details.group summary { cursor: pointer; color: var(--text); }
   .bal-tiles .bal-main { grid-column: 1 / -1; }
   .bal-tiles .tile .value { font-size: 18px; }
 }
+/* room for the balance in the header: the tagline goes, the language menu fits its choice */
+.bar-in:has(.chip-bal) .brand small { display: none; }
+#lang { field-sizing: content; }

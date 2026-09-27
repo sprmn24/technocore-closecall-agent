@@ -647,12 +647,15 @@ function renderTicker() {
 }
 function renderWallet() {
   const w = clear($("wallet-chip"));
+  // the chip's DID: click copies it; a shorter form takes over when the header gets tight
+  const chipDid = (did) => el("span", { class: "mono did chip-did", title: did + " · " + t("ac.copydid"), onclick: () => copy(did) },
+    el("span", { class: "dl" }, did.slice(8, 16) + "…" + did.slice(-6)), el("span", { class: "ds" }, "…" + did.slice(-6)));
   const bal = () => {
     const b = registered() ? accountBook() : null;
-    return b ? el("a", { class: "chip-bal num", href: "#account", title: t("bal.chip") + " · " + myDid() }, fmt(P4(b.cash)) + " POLF") : null;
+    return b ? el("a", { class: "chip-bal num", href: "#account", title: t("bal.chip") }, fmt(P4(b.cash)) + " POLF") : null;
   };
-  if (S.signer) w.append(el("span", { class: "dot good" }), didEl(S.signer.did), bal() || "");
-  else if (S.watchDid) w.append(el("span", { class: "dot good" }), didEl(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"), bal() || "");
+  if (S.signer) w.append(el("span", { class: "dot good" }), chipDid(S.signer.did), bal() || "");
+  else if (S.watchDid) w.append(el("span", { class: "dot good" }), chipDid(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"), bal() || "");
   else if (S.vault) w.append(el("span", { class: "dot warn" }), t("wl.locked"));
   else w.append(el("span", { class: "dot" }), t("wl.none"));
 }
