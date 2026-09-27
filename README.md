@@ -22,9 +22,10 @@ This repository gives anyone a way in, including people who have never touched T
 
 | Tab | What it does |
 |---|---|
-| **Start** | Three steps: "Start playing" (creates a key and a recovery file), register, make a first trade |
+| **Start** | Three steps: "Start playing" (one click: a key and a recovery file), register, make a first trade |
 | **Trade** | Publish a signed offer (buy/sell, price, size, validity) with fee, collateral, break-even and P&L scenarios; browse the offer board and accept other players' offers |
-| **My account** | Your key (backup, lock, remove), an estimated position and P&L, and every message you signed with its referee outcome |
+| **My account** | Your key, an estimated position and P&L, and every message you signed with its referee outcome |
+| **Leaderboard** | The referee's top 25 with prize places, tied keys grouped (ties share the places they span), your rank, search by did:key |
 | **Market** | Live NVIDIA reference and ±5% band, players, open interest, leaderboard, largest positions, sweeps, recent trades with verified signatures |
 | **Rules & help** | The game in plain language and an FAQ |
 
@@ -32,12 +33,14 @@ This repository gives anyone a way in, including people who have never touched T
 
 - **No server.** The page is static and runs on GitHub Pages. Your browser talks to
   `technocore.chat` and `api.hyperliquid.xyz` directly and checks every signature itself.
-- **No seed entry, ever.** The key is generated with WebCrypto in the browser and stored encrypted
-  in `localStorage` (PBKDF2-SHA256 with 600k iterations, then AES-GCM). The backup is a recovery
-  *file* the player downloads before continuing; restoring means picking that file, which is read
-  locally and never uploaded. The site has no field for pasting a seed or private key, so "paste
-  your seed" is always a scam signal. Players with an existing Technocore key don't need it, since
-  any `did:key` can play; if they want to use it, the CLI keeps it in their own terminal.
+- **No password, no seed entry.** The key is generated with WebCrypto and kept in IndexedDB as a
+  *non-extractable* `CryptoKey`: it signs in this browser, but nothing can read it out, this site's
+  own code included. The only backup is a recovery file downloaded once at creation (Safari clears
+  site data after 7 days without a visit, so the file matters). Restoring means picking that file,
+  which is read locally and never uploaded. The site has no field for pasting a seed or private key,
+  so "paste your seed" is always a scam signal. Players with an existing Technocore key don't need
+  it, since any `did:key` can play; if they want to use it, the CLI keeps it in their own terminal.
+  Password vaults from earlier versions are unlocked once and moved over.
 - **Locked down.** The Content-Security-Policy allows scripts only from the site itself and
   network requests only to technocore.chat and Hyperliquid. Every string from the network is
   rendered as text, never as HTML.
@@ -122,7 +125,7 @@ Apache-2.0.
 **Uygulama:** https://sprmn24.github.io/technocore-closecall-agent/
 
 Technocore **Close Call** yarışmasına tarayıcıdan katılmak için gayriresmî ve açık kaynak bir araç.
-Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: "Oynamaya başla" ile anahtar ve
-kurtarma dosyası oluştur, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et. Site hiçbir
-zaman seed ya da özel anahtar istemez. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
+Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: "Oynamaya başla" ile tek tıkta anahtar ve
+kurtarma dosyası oluştur, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et. Şifre yok; site
+hiçbir zaman seed ya da özel anahtar istemez. Liderlik sekmesinde ödül sıraları ve kendi sıran görünür. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
 Arapça, Türkçe ve Fransızca. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.

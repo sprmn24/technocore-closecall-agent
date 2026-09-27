@@ -22,6 +22,7 @@
       <a href="#start" data-view="start" data-i18n="nav.start">Start</a>
       <a href="#trade" data-view="trade" data-i18n="nav.trade">Trade</a>
       <a href="#account" data-view="account" data-i18n="nav.account">My account</a>
+      <a href="#leaders" data-view="leaders" data-i18n="nav.leaders">Leaderboard</a>
       <a href="#market" data-view="market" data-i18n="nav.market">Market</a>
       <a href="#learn" data-view="learn" data-i18n="nav.learn">Rules &amp; help</a>
     </nav>
@@ -56,6 +57,7 @@
         <div><b data-i18n="start.f2a">10,000 POLF</b><span data-i18n="start.f2b">play money for every key</span></div>
         <div><b data-i18n="start.f3a">1,000,000 FLOP</b><span data-i18n="start.f3b">shared by the top 3</span></div>
         <div><b id="start-lock">–</b><span data-i18n="start.f4b">until trading locks</span></div>
+        <a class="fact-link" href="#leaders"><b id="start-leader">–</b><span data-i18n="start.f5b">leader right now</span></a>
       </div>
     </div>
 
@@ -103,6 +105,18 @@
       <h2 data-i18n="ac.activity">Activity</h2>
       <p class="muted" data-i18n="ac.activitydesc">Everything this browser signed with your key. Outcomes come from the referee's flow posts, which list only part of each sweep.</p>
       <div class="scroll"><table id="t-activity"></table></div>
+    </div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section class="view" id="view-leaders" hidden>
+    <section class="tiles" id="lb-tiles"></section>
+    <div class="card">
+      <div class="card-head"><h2 data-i18n="lb.title">Leaderboard</h2></div>
+      <p class="muted" data-i18n="lb.desc">Ranked by profit at the referee's board price.</p>
+      <input class="input mono lb-search" id="lb-search" autocomplete="off" spellcheck="false">
+      <div id="lb-found" class="note"></div>
+      <div class="scroll"><table id="t-leaders"></table></div>
     </div>
   </section>
 

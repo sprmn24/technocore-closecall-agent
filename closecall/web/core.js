@@ -88,6 +88,17 @@ export function publicFromDid(did) {
   return raw.slice(2);
 }
 
+/** A signer around a non-extractable CryptoKey: it can sign, but nothing (not even this page) can read the key out. */
+export function signerFromKey(key, did) {
+  return {
+    did,
+    key,
+    async sign(message) {
+      return b64url(new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, key, enc.encode(message))));
+    },
+  };
+}
+
 /** A signer for a seed. The CryptoKey it keeps is non-extractable. */
 export async function signerFromSeed(seed) {
   if (!(seed instanceof Uint8Array) || seed.length !== 32) throw new Error("seed must be 32 bytes");
@@ -96,14 +107,42 @@ export async function signerFromSeed(seed) {
   const jwk = await crypto.subtle.exportKey("jwk", exportable);
   const priv = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, ["sign"]);
   pkcs8.fill(0);
-  const did = didFromPublic(unb64url(jwk.x));
-  return {
-    did,
-    async sign(message) {
-      return b64url(new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, priv, enc.encode(message))));
-    },
-  };
+  return signerFromKey(priv, didFromPublic(unb64url(jwk.x)));
 }
+
+// ---- device key store: the non-extractable CryptoKey itself, in IndexedDB -----------------
+// Structured clone keeps a CryptoKey's extractable=false, so what is stored can sign in this
+// browser and can never be exported: no password, and nothing a script could copy away.
+const IDB_NAME = "closecall", IDB_STORE = "keys", IDB_ID = "owner";
+function idb() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function idbDo(mode, fn) {
+  const db = await idb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, mode), req = fn(tx.objectStore(IDB_STORE));
+      tx.oncomplete = () => resolve(req && req.result);
+      tx.onerror = tx.onabort = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+export async function storeDeviceKey(signer) {
+  if (signer.key.extractable) throw new Error("refusing to store an extractable key");
+  await idbDo("readwrite", (s) => s.put({ did: signer.did, key: signer.key, created: Date.now() }, IDB_ID));
+}
+export async function loadDeviceKey() {
+  try {
+    const rec = await idbDo("readonly", (s) => s.get(IDB_ID));
+    return rec && rec.key && DID_RE.test(rec.did) ? signerFromKey(rec.key, rec.did) : null;
+  } catch { return null; }
+}
+export async function forgetDeviceKey() { await idbDo("readwrite", (s) => s.delete(IDB_ID)); }
 
 const pubCache = new Map();
 export async function verify(did, message, sig) {

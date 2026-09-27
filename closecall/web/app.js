@@ -13,6 +13,7 @@ const S = {
   desk: { offers: [], filled: new Set(), at: 0, error: null },
   flowIndex: new Map(),   // trade id -> {outcome, reason, n}
   market: null,
+  leaders: null,          // latest referee pnl post
   trust: null,
   view: "start",
   form: { side: "buy", qty: "1", px: "", ttl: 6, taker: "" },
@@ -117,25 +118,16 @@ const registered = () => journal().some((e) => e.kind === "owner");
 const myDid = () => (S.signer ? S.signer.did : S.vault ? S.vault.did : null);
 
 // ---- key management ----------------------------------------------------------------------
-function passwordFields(withConfirm) {
-  const p1 = el("input", { class: "input", type: "password", autocomplete: "new-password", minlength: "8" });
-  const p2 = withConfirm ? el("input", { class: "input", type: "password", autocomplete: "new-password" }) : null;
-  const nodes = [el("div", { class: "field" }, el("label", {}, t("key.pw")), p1, el("span", { class: "hint" }, t("key.pwhint")))];
-  if (p2) nodes.push(el("div", { class: "field" }, el("label", {}, t("key.pw2")), p2));
-  const check = () => {
-    if (p1.value.length < 8) return t("key.pwshort");
-    if (p2 && p1.value !== p2.value) return t("key.pwmismatch");
-    return null;
-  };
-  return { nodes, p1, check };
-}
-
-async function activate(seed, password) {
+// ---- key management ----------------------------------------------------------------------
+// The key lives in IndexedDB as a non-extractable CryptoKey: it signs in this browser, nothing
+// can read it out, and there is no password. The recovery file, downloaded once at creation,
+// is the only backup. Old password vaults (cc-vault-v1) are unlocked once and moved over.
+async function adopt(seed) {
   const signer = await C.signerFromSeed(seed);
-  const vault = await C.sealSeed(seed, password, signer.did);
-  C.saveVault(vault);
-  S.vault = vault; S.signer = signer;
   seed.fill(0);
+  await C.storeDeviceKey(signer);
+  if (S.vault && S.vault.did === signer.did) { C.forgetVault(); S.vault = null; }
+  S.signer = signer;
 }
 
 function recoveryText(seedHex, did) {
@@ -160,55 +152,40 @@ async function seedFromRecovery(text) {
   const m = /^seed:\s*([0-9a-fA-F]{64})\s*$/m.exec(text);
   if (!m) throw new Error(t("key.badfile"));
   const seed = C.hexToBytes(m[1]);
-  const signer = await C.signerFromSeed(seed);
+  const signer = await C.signerFromSeed(C.hexToBytes(m[1]));
   const d = /^did:\s*(did:key:\S+)\s*$/m.exec(text);
   if (d && d[1] !== signer.did) { seed.fill(0); throw new Error(t("key.badfile")); }
   return { seed, did: signer.did };
 }
 
 async function createKeyFlow() {
-  // Stage 1: a password. Stage 2: the recovery file. The seed is never typed or pasted.
   const seed = C.newSeed();
-  const signer = await C.signerFromSeed(seed);
+  const signer = await C.signerFromSeed(C.hexToBytes(C.bytesToHex(seed)));
   const seedHex = C.bytesToHex(seed);
   const ok = await modal((close) => {
-    const box = el("div", { class: "modal-in-flow" });
-    const pw = passwordFields(true);
     const err = el("p", { class: "hint bad" });
-    const next = el("button", { class: "btn primary", type: "button" }, t("key.makekey"));
-    const stage2 = () => {
-      const saved = el("input", { type: "checkbox" });
-      const finish = el("button", { class: "btn primary", type: "button", disabled: true }, t("key.finish"));
-      saved.addEventListener("change", () => { finish.disabled = !saved.checked; });
-      const dl = el("button", { class: "btn primary big wide", type: "button" }, "⭳ " + t("key.download"));
-      dl.addEventListener("click", () => { download(recoveryName(signer.did), recoveryText(seedHex, signer.did)); saved.checked = true; finish.disabled = false; });
-      finish.addEventListener("click", async () => {
-        busy(finish, true, t("key.securing"));
-        try { await activate(seed, pw.p1.value); close(true); } catch (e) { err.textContent = errText(e); busy(finish, false); }
-      });
-      clear(box).append(
-        el("h2", {}, t("key.savetitle")),
-        el("p", { class: "muted" }, t("key.savedesc")),
-        el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), el("span", { class: "mono" }, signer.did))),
-        dl,
-        el("div", { class: "callout warn" }, t("key.seedwarn")),
-        el("label", { class: "check" }, saved, el("span", {}, t("key.saved"))),
-        el("details", {}, el("summary", { class: "hint" }, t("key.advanced")),
-          el("p", { class: "hint" }, t("key.yourseed")), el("div", { class: "secret" }, seedHex),
-          el("button", { class: "btn small", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed"))),
-        err,
-        el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), finish),
-      );
-      dl.focus();
-    };
-    next.addEventListener("click", () => { const p = pw.check(); if (p) { err.textContent = p; return; } err.textContent = ""; stage2(); });
-    box.append(
-      el("h2", {}, t("key.newtitle")),
-      el("p", { class: "muted" }, t("key.newdesc")),
-      ...pw.nodes, err,
-      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), next),
-    );
-    return box;
+    const saved = el("input", { type: "checkbox" });
+    const finish = el("button", { class: "btn primary", type: "button", disabled: true }, t("key.finish"));
+    saved.addEventListener("change", () => { finish.disabled = !saved.checked; });
+    const dl = el("button", { class: "btn primary big wide", type: "button" }, "⭳ " + t("key.download"));
+    dl.addEventListener("click", () => { download(recoveryName(signer.did), recoveryText(seedHex, signer.did)); saved.checked = true; finish.disabled = false; });
+    finish.addEventListener("click", async () => {
+      busy(finish, true, t("ui.working"));
+      try { await adopt(seed); close(true); } catch (e) { err.textContent = errText(e); busy(finish, false); }
+    });
+    return [
+      el("h2", {}, t("key.savetitle")),
+      el("p", { class: "muted" }, t("key.savedesc")),
+      el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), el("span", { class: "mono" }, signer.did))),
+      dl,
+      el("div", { class: "callout warn" }, t("key.seedwarn")),
+      el("label", { class: "check" }, saved, el("span", {}, t("key.saved"))),
+      el("details", {}, el("summary", { class: "hint" }, t("key.advanced")),
+        el("p", { class: "hint" }, t("key.yourseed")), el("div", { class: "secret" }, seedHex),
+        el("button", { class: "btn small", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed"))),
+      err,
+      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), finish),
+    ];
   });
   if (!ok) seed.fill(0);
   if (ok) { toast(t("key.ready")); renderAll(); }
@@ -220,8 +197,7 @@ async function restoreFlow() {
     const file = el("input", { class: "sr", type: "file", accept: ".txt,text/plain", id: "recovery-file" });
     const fname = el("span", { class: "hint" }, t("key.nofilechosen"));
     const picker = el("div", { class: "row" }, el("label", { class: "btn", for: "recovery-file" }, t("key.pickfile")), fname);
-    const preview = el("div", { class: "hint" });
-    const pw = passwordFields(true);
+    const preview = el("div", { class: "hint mono" });
     const err = el("p", { class: "hint bad" });
     let found = null;
     file.addEventListener("change", async () => {
@@ -236,52 +212,30 @@ async function restoreFlow() {
     const go = el("button", { class: "btn primary", type: "button" }, t("key.restore"));
     go.addEventListener("click", async () => {
       if (!found) { err.textContent = t("key.nofile"); return; }
-      const p = pw.check(); if (p) { err.textContent = p; return; }
-      busy(go, true, t("key.securing"));
-      try { await activate(found.seed, pw.p1.value); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
+      busy(go, true, t("ui.working"));
+      try { await adopt(found.seed); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
     });
     return [
       el("h2", {}, t("key.restoretitle")),
       el("p", { class: "muted" }, t("key.restoredesc")),
       el("div", { class: "field" }, el("span", { class: "label" }, t("key.choosefile")), file, picker, preview),
-      ...pw.nodes, err,
+      err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
     ];
   });
   if (ok) { toast(t("key.ready")); renderAll(); }
 }
 
-async function unlock(password, btn, errNode) {
+/** Old password vault from an earlier version: unlock once, then it becomes a device key. */
+async function unlockLegacy(password, btn, errNode) {
   busy(btn, true, t("key.unlocking"));
   try {
     const seed = await C.openSeed(S.vault, password);
-    S.signer = await C.signerFromSeed(seed); seed.fill(0);
-    if (S.signer.did !== S.vault.did) throw new Error("vault mismatch");
+    const probe = await C.signerFromSeed(C.hexToBytes(C.bytesToHex(seed)));
+    if (probe.did !== S.vault.did) throw new Error("vault mismatch");
+    await adopt(seed);
     toast(t("key.unlocked")); renderAll();
   } catch (e) { errNode.textContent = e.message === "wrong password" ? t("key.wrongpw") : errText(e); busy(btn, false); }
-}
-
-function lock() { S.signer = null; toast(t("key.locked")); renderAll(); }
-
-async function revealBackup() {
-  await modal((close) => {
-    const pw = el("input", { class: "input", type: "password", autocomplete: "current-password" });
-    const out = el("div"), err = el("p", { class: "hint bad" });
-    const go = el("button", { class: "btn primary", type: "button" }, "⭳ " + t("key.download"));
-    go.addEventListener("click", async () => {
-      try {
-        const seed = await C.openSeed(S.vault, pw.value), hex = C.bytesToHex(seed); seed.fill(0);
-        download(recoveryName(S.vault.did), recoveryText(hex, S.vault.did));
-        clear(out).append(el("div", { class: "callout good" }, t("key.downloaded")),
-          el("details", {}, el("summary", { class: "hint" }, t("key.advanced")), el("p", { class: "hint" }, t("key.yourseed")),
-            el("div", { class: "secret" }, hex), el("button", { class: "btn small", type: "button", onclick: () => copy(hex) }, t("key.copyseed"))));
-        go.remove();
-      } catch { err.textContent = t("key.wrongpw"); }
-    });
-    return [el("h2", {}, t("key.backuptitle")), el("p", { class: "muted" }, t("key.savedesc")), el("div", { class: "callout warn" }, t("key.seedwarn")),
-      el("div", { class: "field" }, el("label", {}, t("key.pw")), pw), err, out,
-      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")), go)];
-  });
 }
 
 async function forgetKey() {
@@ -294,6 +248,7 @@ async function forgetKey() {
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go)];
   });
   if (!ok) return;
+  await C.forgetDeviceKey().catch(() => {});
   C.forgetVault(); S.vault = null; S.signer = null; toast(t("key.forgotten")); renderAll();
 }
 
@@ -473,6 +428,27 @@ async function loadFlow(limit = 50) {
   } catch { /* shown as pending */ }
 }
 
+async function loadLeaders() {
+  try {
+    const referee = S.price && S.price._from;
+    const posts = C.signedJson(await C.readRoom("d-close1-pnl", { limit: 3 })).filter((m) => m.json.t === "pnl" && (!referee || m.from === referee));
+    if (posts.length) S.leaders = { ...posts[posts.length - 1].json, _ts: Date.parse(posts[posts.length - 1].ts) };
+  } catch { /* keep the last one */ }
+  renderLeaders(); renderStartLeader();
+}
+
+/** Rows of the referee's top list, identical scores grouped; places are 1-based. */
+function leaderGroups(top) {
+  const groups = [];
+  top.forEach((e, i) => {
+    if (!Array.isArray(e) || typeof e[0] !== "string") return;
+    const last = groups[groups.length - 1];
+    if (last && last.v === String(e[1])) { last.keys.push(e[0]); last.end = i + 1; }
+    else groups.push({ v: String(e[1]), keys: [e[0]], start: i + 1, end: i + 1 });
+  });
+  return groups;
+}
+
 async function loadMarket() {
   const read = (room, limit) => C.readRoom(room, { limit }).then(C.signedJson).catch(() => []);
   const [price, state, pos, pnl, flow, feed] = await Promise.all([
@@ -545,15 +521,14 @@ function renderStart() {
   if (S.signer) {
     s1s.append(statusNode(true, t("s1.ready")));
     s1.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), didEl(S.signer.did))),
-      el("div", { class: "row" }, el("button", { class: "btn small", type: "button", onclick: revealBackup }, t("key.backup")),
-        el("button", { class: "btn small ghost", type: "button", onclick: lock }, t("key.lock"))));
+      el("p", { class: "hint" }, t("ac.recoverynote")));
   } else if (S.vault) {
     s1s.append(statusNode(false, t("wl.locked")));
     const pw = el("input", { class: "input", type: "password", autocomplete: "current-password", placeholder: t("key.pw") });
     const err = el("p", { class: "hint bad" });
     const go = el("button", { class: "btn primary", type: "button" }, t("key.unlock"));
-    go.addEventListener("click", () => unlock(pw.value, go, err));
-    pw.addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(pw.value, go, err); });
+    go.addEventListener("click", () => unlockLegacy(pw.value, go, err));
+    pw.addEventListener("keydown", (e) => { if (e.key === "Enter") unlockLegacy(pw.value, go, err); });
     s1.append(el("p", { class: "muted" }, t("key.lockeddesc"), " ", didEl(S.vault.did)), el("div", { class: "row" }, el("div", { class: "field" }, pw), go), err,
       el("div", { class: "row alt" }, el("button", { class: "btn small ghost", type: "button", onclick: restoreFlow }, t("key.have")),
         el("button", { class: "btn small ghost", type: "button", onclick: forgetKey }, t("key.other"))));
@@ -716,13 +691,14 @@ function renderAccount() {
   if (S.view !== "account") return;
   const k = clear($("acct-key")), s = clear($("acct-summary"));
   k.append(el("h2", {}, t("ac.key")));
-  if (!S.vault) { k.append(el("p", { class: "muted" }, t("key.needkey")), el("a", { class: "btn primary", href: "#start" }, t("nav.start"))); }
+  const did = myDid();
+  if (!did) { k.append(el("p", { class: "muted" }, t("key.needkey")), el("a", { class: "btn primary", href: "#start" }, t("nav.start"))); }
   else {
-    k.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, "DID"), el("span", { class: "mono" }, S.vault.did)),
+    k.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, "DID"), el("span", { class: "mono" }, did)),
       el("div", {}, el("span", {}, t("ac.state")), el("span", {}, S.signer ? t("s1.ready") : t("wl.locked")))),
-      el("div", { class: "row" }, el("button", { class: "btn small", type: "button", onclick: () => copy(S.vault.did) }, t("ac.copydid")),
-        el("button", { class: "btn small", type: "button", onclick: revealBackup }, t("key.backup")),
-        S.signer ? el("button", { class: "btn small ghost", type: "button", onclick: lock }, t("key.lock")) : el("a", { class: "btn small primary", href: "#start" }, t("key.unlock")),
+      el("p", { class: "hint" }, t("ac.recoverynote")),
+      el("div", { class: "row" }, el("button", { class: "btn small", type: "button", onclick: () => copy(did) }, t("ac.copydid")),
+        S.signer ? null : el("a", { class: "btn small primary", href: "#start" }, t("key.unlock")),
         el("button", { class: "btn small danger ghost", type: "button", onclick: forgetKey }, t("key.forget"))));
   }
   const L = estimateLedger();
@@ -897,6 +873,51 @@ function renderMarket() {
     el("li", { class: "muted" }, t("mk.t4")));
 }
 
+// ---- rendering: leaderboard -------------------------------------------------------------
+function rankLabel(g) { return g.start === g.end ? "#" + g.start : `#${g.start}–${g.end}`; }
+function renderStartLeader() {
+  const n = $("start-leader"); if (!n) return;
+  const top = S.leaders && Array.isArray(S.leaders.top) ? S.leaders.top : [];
+  n.textContent = top.length ? (Number(top[0][1]) >= 0 ? "+" : "") + fmt(top[0][1]) + " POLF" : "–";
+}
+function renderLeaders() {
+  if (S.view !== "leaders") return;
+  const L = S.leaders, top = L && Array.isArray(L.top) ? L.top : [];
+  const groups = leaderGroups(top), me = myDid();
+  const mine = me ? groups.find((g) => g.keys.includes(me)) : null;
+  const tiles = clear($("lb-tiles"));
+  tiles.append(
+    tile(t("lb.prize"), "1,000,000 FLOP", t("lb.prizefoot")),
+    tile(t("lb.leader"), groups.length ? (Number(groups[0].v) >= 0 ? "+" : "") + fmt(groups[0].v) + " POLF" : "–", groups.length && groups[0].keys.length > 1 ? t("lb.nkeys", { n: groups[0].keys.length }) : ""),
+    tile(t("lb.you"), mine ? rankLabel(mine) : me ? t("lb.notin") : t("lb.nokey"), mine ? fmt(mine.v) + " POLF" : ""),
+    tile(t("lb.asof"), L ? t("tr.sweep") + " " + L.n : "–", L ? t("lb.asoffoot", { mark: L.mark }) : ""),
+  );
+  $("lb-search").placeholder = t("lb.search");
+  const q = $("lb-search").value.trim(), found = clear($("lb-found"));
+  if (q) {
+    const g = groups.find((x) => x.keys.includes(q));
+    found.append(g ? t("lb.found", { rank: rankLabel(g), v: fmt(g.v) }) : C.DID_RE.test(q) ? t("lb.notfound") : t("tr.badtaker"));
+  }
+  const tb = clear($("t-leaders"));
+  tb.append(el("thead", {}, el("tr", {}, el("th", {}, t("lb.rank")), el("th", {}, t("lb.player")), el("th", { class: "r" }, t("lb.pnl")), el("th", {}, t("lb.prizecol")))));
+  const body = el("tbody");
+  if (!groups.length) body.append(el("tr", {}, el("td", { colspan: "4", class: "empty" }, L ? t("lb.empty") : t("ui.loading"))));
+  for (const g of groups) {
+    const isMe = me && g.keys.includes(me), prize = g.start <= 3;
+    const who = g.keys.length === 1
+      ? el("span", {}, didEl(g.keys[0]), isMe ? el("span", { class: "badge ok" }, t("mk.you")) : "")
+      : el("details", { class: "group", open: isMe || null }, el("summary", {}, t("lb.nkeys", { n: g.keys.length }), isMe ? el("span", { class: "badge ok" }, t("mk.you")) : ""),
+          el("div", { class: "group-list" }, g.keys.map((k) => el("div", {}, didEl(k), k === me ? el("span", { class: "badge ok" }, t("mk.you")) : ""))));
+    const pl = prize ? (g.start === Math.min(g.end, 3) ? t("lb.place", { a: g.start }) : t("lb.places", { a: g.start, b: Math.min(g.end, 3) })) : "";
+    body.append(el("tr", { class: (isMe ? "you-row " : "") + (prize ? "prize-row" : "") },
+      el("td", {}, prize && g.start === g.end ? el("span", { class: "medal m" + g.start }, String(g.start)) : rankLabel(g)),
+      el("td", {}, who),
+      el("td", { class: "r num " + (Number(g.v) >= 0 ? "buy-t" : "sell-t") }, (Number(g.v) >= 0 ? "+" : "") + fmt(g.v)),
+      el("td", {}, pl ? el("span", { class: "badge warn" }, pl) : "")));
+  }
+  tb.append(body);
+}
+
 // ---- rendering: learn --------------------------------------------------------------------
 function renderLearn() {
   const box = clear($("learn"));
@@ -906,7 +927,7 @@ function renderLearn() {
     ...sec("ln.h2", "ln.p2a", "ln.p2b", "ln.p2c"),
     ...sec("ln.h3", "ln.p3a", "ln.p3b"),
     el("h2", {}, t("ln.faq")),
-    ...["q8", "q1", "q2", "q3", "q4", "q5", "q6", "q7"].map((q) => el("details", {}, el("summary", {}, t("ln." + q)), el("p", {}, t("ln." + q + "a")))),
+    ...["q8", "q9", "q1", "q2", "q3", "q4", "q5", "q6", "q7"].map((q) => el("details", {}, el("summary", {}, t("ln." + q)), el("p", {}, t("ln." + q + "a")))),
     el("h2", {}, t("ln.h4")), el("p", {}, t("ln.p4")),
     el("p", {}, el("a", { href: "https://github.com/sprmn24/technocore-closecall-agent" }, "github.com/sprmn24/technocore-closecall-agent")),
   );
@@ -919,15 +940,18 @@ function renderAll() {
   if (S.view === "account") renderAccount();
   if (S.view === "market") renderMarket();
   if (S.view === "learn") renderLearn();
+  if (S.view === "leaders") renderLeaders();
+  renderStartLeader();
 }
 function route() {
   const v = (location.hash || "#start").slice(1);
-  S.view = ["start", "trade", "account", "market", "learn"].includes(v) ? v : "start";
+  S.view = ["start", "trade", "account", "leaders", "market", "learn"].includes(v) ? v : "start";
   document.querySelectorAll(".view").forEach((n) => { n.hidden = n.id !== "view-" + S.view; });
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === S.view));
   renderAll();
   if (S.view === "trade") loadDesk();
   if (S.view === "market") loadMarket();
+  if (S.view === "leaders" || S.view === "start") loadLeaders();
   if (S.view === "account") Promise.all([loadFlow(), loadDesk()]).then(renderAccount);
   window.scrollTo(0, 0);
 }
@@ -954,7 +978,9 @@ async function boot() {
     if (S.view === "market") renderCharts();
   });
   $("desk-refresh").addEventListener("click", loadDesk);
+  $("lb-search").addEventListener("input", renderLeaders);
   S.ed25519 = await C.ed25519Supported();
+  S.signer = await C.loadDeviceKey();
   addEventListener("hashchange", route);
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => S.view === "market" && renderCharts(), 150); });
   route();
@@ -970,6 +996,7 @@ async function boot() {
   setInterval(() => { if (!document.hidden) loadTicker(); }, 30_000);
   setInterval(() => { if (!document.hidden && S.view === "trade") loadDesk(); }, 20_000);
   setInterval(() => { if (!document.hidden && S.view === "market") loadMarket(); }, 90_000);
+  setInterval(() => { if (!document.hidden && (S.view === "leaders" || S.view === "start")) loadLeaders(); }, 60_000);
   setInterval(() => { if (!document.hidden && S.view === "account") Promise.all([loadFlow(), loadDesk()]).then(renderAccount); }, 60_000);
 }
 boot();

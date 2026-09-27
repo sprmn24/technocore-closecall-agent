@@ -73,7 +73,7 @@ p { margin: 0; }
 .logo-bg { fill: var(--accent); }
 .logo-line { stroke: #fff; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .tabs { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; }
-.tabs a { color: var(--text-2); text-decoration: none; padding: 7px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+.tabs a { color: var(--text-2); text-decoration: none; padding: 7px 10px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
 .tabs a:hover { background: var(--surface-2); color: var(--text); }
 .tabs a.active { background: var(--text); color: var(--bg); }
 .bar-tools { display: flex; align-items: center; gap: 8px; }
@@ -228,6 +228,10 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 .foot { color: var(--muted); font-size: 12.5px; padding-top: 8px; padding-bottom: 32px; display: grid; gap: 6px; }
 
+@media (max-width: 1240px) {
+  .brand small { display: none; }
+  .bar-in { gap: 10px; }
+}
 @media (max-width: 720px) {
   .tabs { order: 3; flex-basis: 100%; overflow-x: auto; flex-wrap: nowrap; }
   .bar-tools { margin-inline-start: auto; }
@@ -242,3 +246,15 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   .ticker { gap: 4px 14px; font-size: 12.5px; }
   .hero h1 { font-size: 26px; }
 }
+
+/* leaderboard */
+.fact-link { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--text); text-decoration: none; }
+.fact-link:hover { border-color: var(--accent); }
+.fact-link b { display: block; font-size: 18px; } .fact-link span { color: var(--text-2); font-size: 13px; }
+.lb-search { margin: 4px 0 8px; max-width: 520px; }
+tr.you-row { background: var(--accent-soft); }
+tr.prize-row td:first-child { font-weight: 700; }
+.medal { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; font-weight: 700; color: #1a1a19; }
+.medal.m1 { background: #eda100; } .medal.m2 { background: #c3c2b7; } .medal.m3 { background: #d9955e; }
+.group-list { display: grid; gap: 4px; margin-top: 6px; max-height: 220px; overflow: auto; }
+details.group summary { cursor: pointer; color: var(--text); }
