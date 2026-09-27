@@ -90,7 +90,8 @@ function modal(build) {
   return new Promise((resolve) => {
     let done = false;
     const close = (v) => { if (done) return; done = true; dlg.close(); resolve(v); };
-    dlg.onclose = () => { if (!done) { done = true; resolve(undefined); } };
+    // a close event still queued from the previous modal arrives while this one is open: ignore it
+    dlg.onclose = () => { if (!done && !dlg.open) { done = true; resolve(undefined); } };
     box.append(...[build(close)].flat(Infinity).filter((x) => x != null && x !== false));
     dlg.showModal();
     const f = box.querySelector("input,textarea,button.primary"); if (f) f.focus();
@@ -647,17 +648,46 @@ function renderTicker() {
 }
 function renderWallet() {
   const w = clear($("wallet-chip"));
-  // the chip's DID: click copies it; a shorter form takes over when the header gets tight
-  const chipDid = (did) => el("span", { class: "mono did chip-did", title: did + " · " + t("ac.copydid"), onclick: () => copy(did) },
+  w.onclick = accountMenu;
+  w.title = t("am.title");
+  // a shorter form of the DID takes over when the header gets tight
+  const chipDid = (did) => el("span", { class: "mono chip-did" },
     el("span", { class: "dl" }, did.slice(8, 16) + "…" + did.slice(-6)), el("span", { class: "ds" }, "…" + did.slice(-6)));
   const bal = () => {
     const b = registered() ? accountBook() : null;
-    return b ? el("a", { class: "chip-bal num", href: "#account", title: t("bal.chip") }, fmt(P4(b.cash)) + " POLF") : null;
+    return b ? el("span", { class: "chip-bal num" }, fmt(P4(b.cash)) + " POLF") : null;
   };
   if (S.signer) w.append(el("span", { class: "dot good" }), chipDid(S.signer.did), bal() || "");
   else if (S.watchDid) w.append(el("span", { class: "dot good" }), chipDid(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"), bal() || "");
   else if (S.vault) w.append(el("span", { class: "dot warn" }), t("wl.locked"));
   else w.append(el("span", { class: "dot" }), t("wl.none"));
+}
+
+/** The header chip's menu: the whole DID, copy it, the balance, and signing out. */
+async function accountMenu() {
+  const did = S.signer ? S.signer.did : S.watchDid;
+  if (!did) { location.hash = "#start"; return; }
+  const b = registered() ? accountBook() : null;
+  const act = await modal((close) => [
+    el("h2", {}, t("am.title")),
+    el("div", { class: "am-did mono" }, did),
+    el("p", { class: "hint" }, S.signer ? t("am.here") : t("am.term")),
+    b ? el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("bal.available")), el("b", { class: "num" }, fmt(P4(b.cash)) + " POLF"))) : null,
+    el("div", { class: "row" },
+      el("button", { class: "btn small", type: "button", onclick: () => copy(did) }, t("ac.copydid")),
+      el("button", { class: "btn small", type: "button", onclick: () => close("account") }, t("nav.account"))),
+    el("hr", { class: "am-sep" }),
+    el("p", { class: "hint" }, S.signer ? t("am.signoutkey") : t("am.signoutdid")),
+    el("div", { class: "modal-actions" },
+      el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.cancel")),
+      el("button", { class: "btn " + (S.signer ? "danger" : "primary"), type: "button", onclick: () => close("out") }, t("am.signout"))),
+  ]);
+  if (act === "account") { location.hash = "#account"; return; }
+  if (act !== "out") return;
+  if (S.signer) { await forgetKey(); if (S.signer) return; }
+  else { setWatch(null); toast(t("am.signedout")); }
+  location.hash = "#start";
+  renderAll();
 }
 
 // ---- rendering: start --------------------------------------------------------------------

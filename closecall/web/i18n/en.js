@@ -404,5 +404,12 @@ export default {
  "bal.feetip": "At least 1%. If you got a better price than the sweep's close, the referee charges that gap instead.",
  "bal.note": "The referee doesn't publish a balance for each key, so this page replays the contest's rules over the trades this browser signed. Fees are the 1% minimum. The referee's ledger is the final word.",
  "bal.chip": "POLF available. Open your statement",
- "bal.funds": "You have {have} POLF available; this needs {need}. The referee would void it."
+ "bal.funds": "You have {have} POLF available; this needs {need}. The referee would void it.",
+ "am.title": "Your account",
+ "am.here": "Your key is saved in this browser and signs here.",
+ "am.term": "You sign in your own terminal; this site only knows your public DID.",
+ "am.signout": "Sign out",
+ "am.signoutkey": "Signing out removes the key from this browser. To come back, restore it from your recovery file or seed.",
+ "am.signoutdid": "Sign out to use a different DID. You can come back any time by entering this one again.",
+ "am.signedout": "Signed out"
 };

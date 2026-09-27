@@ -298,7 +298,11 @@ details.group summary { cursor: pointer; color: var(--text); }
 
 /* balance */
 .chip-bal { color: var(--text); font-weight: 600; text-decoration: none; padding-inline-start: 8px; border-inline-start: 1px solid var(--border); }
-.chip-bal:hover { text-decoration: underline; }
+button.chip { font: inherit; font-size: 12.5px; cursor: pointer; }
+button.chip:hover { border-color: var(--text-2); }
+button.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.am-did { font-size: 13px; word-break: break-all; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.am-sep { border: 0; border-top: 1px solid var(--border); margin: 14px 0 4px; }
 .bal-grant { font-weight: 600; }
 .bal-tiles { margin-top: 12px; }
 .bal-tiles .tile { background: var(--surface-2); border: none; box-shadow: none; }

@@ -404,5 +404,12 @@ export default {
  "bal.feetip": "No mínimo 1%. Se você conseguiu um preço melhor que o fechamento do sweep, o árbitro cobra essa diferença no lugar.",
  "bal.note": "O árbitro não publica o saldo de cada chave, então esta página refaz as regras do concurso sobre as negociações assinadas neste navegador. As taxas são o mínimo de 1%. O registro do árbitro é a palavra final.",
  "bal.chip": "POLF disponíveis. Abrir o extrato",
- "bal.funds": "Você tem {have} POLF disponíveis; isto precisa de {need}. O árbitro anularia a negociação."
+ "bal.funds": "Você tem {have} POLF disponíveis; isto precisa de {need}. O árbitro anularia a negociação.",
+ "am.title": "Sua conta",
+ "am.here": "Sua chave está salva neste navegador e assina aqui.",
+ "am.term": "Você assina no seu próprio terminal; este site só conhece seu DID público.",
+ "am.signout": "Sair",
+ "am.signoutkey": "Sair remove a chave deste navegador. Para voltar, restaure-a com seu arquivo de recuperação ou sua seed.",
+ "am.signoutdid": "Saia para usar outro DID. Você pode voltar quando quiser digitando este DID de novo.",
+ "am.signedout": "Você saiu"
 };

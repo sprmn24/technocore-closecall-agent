@@ -404,5 +404,12 @@ export default {
  "bal.feetip": "En az %1. Sweep kapanışından daha iyi bir fiyat aldıysan hakem bunun yerine aradaki farkı keser.",
  "bal.note": "Hakem her anahtar için bakiye yayınlamaz; bu sayfa yarışmanın kurallarını bu tarayıcının imzaladığı işlemler üzerinde yeniden işler. Ücretler en az %1 üzerinden. Son söz hakemin defterindedir.",
  "bal.chip": "Kullanılabilir POLF. Hesap dökümünü aç",
- "bal.funds": "Kullanılabilir {have} POLF var; bu işlem {need} gerektiriyor. Hakem bunu geçersiz sayar."
+ "bal.funds": "Kullanılabilir {have} POLF var; bu işlem {need} gerektiriyor. Hakem bunu geçersiz sayar.",
+ "am.title": "Hesabın",
+ "am.here": "Anahtarın bu tarayıcıda kayıtlı ve burada imzalar.",
+ "am.term": "Kendi terminalinde imzalarsın; bu site yalnızca açık DID'ini bilir.",
+ "am.signout": "Çıkış yap",
+ "am.signoutkey": "Çıkış yapınca anahtar bu tarayıcıdan silinir. Geri dönmek için kurtarma dosyandan ya da seed'inden geri yükle.",
+ "am.signoutdid": "Başka bir DID kullanmak için çıkış yap. Bu DID'i tekrar yazarak istediğin zaman geri dönebilirsin.",
+ "am.signedout": "Çıkış yapıldı"
 };

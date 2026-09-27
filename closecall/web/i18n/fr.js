@@ -404,5 +404,12 @@ export default {
  "bal.feetip": "Au moins 1 %. Si vous avez obtenu un meilleur prix que la clôture du sweep, l'arbitre prélève cet écart à la place.",
  "bal.note": "L'arbitre ne publie pas de solde par clé : cette page rejoue les règles du concours sur les échanges signés dans ce navigateur. Les frais sont le minimum de 1 %. Le registre de l'arbitre fait foi.",
  "bal.chip": "POLF disponibles. Ouvrir le relevé",
- "bal.funds": "Vous avez {have} POLF disponibles ; il en faut {need}. L'arbitre annulerait l'échange."
+ "bal.funds": "Vous avez {have} POLF disponibles ; il en faut {need}. L'arbitre annulerait l'échange.",
+ "am.title": "Votre compte",
+ "am.here": "Votre clé est enregistrée dans ce navigateur et signe ici.",
+ "am.term": "Vous signez dans votre propre terminal ; ce site ne connaît que votre DID public.",
+ "am.signout": "Se déconnecter",
+ "am.signoutkey": "Se déconnecter supprime la clé de ce navigateur. Pour revenir, restaurez-la depuis votre fichier de récupération ou votre seed.",
+ "am.signoutdid": "Déconnectez-vous pour utiliser un autre DID. Vous pouvez revenir à tout moment en saisissant de nouveau celui-ci.",
+ "am.signedout": "Déconnecté"
 };
