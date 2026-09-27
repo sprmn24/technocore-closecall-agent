@@ -200,17 +200,25 @@ async function createKeyFlow() {
   if (ok) { toast(t("key.ready")); renderAll(); }
 }
 
-async function restoreFlow() {
+/**
+ * Load a key into this browser from the recovery file or the seed. With `expect` (a DID someone
+ * already uses through the terminal) the page says so, warns first, and refuses any other key.
+ * Resolves true once the key is stored.
+ */
+async function importKeyFlow(expect) {
   const ok = await modal((close) => {
     // The native file button is labelled in the browser's language, not the page's: hide it behind our own.
     const file = el("input", { class: "sr", type: "file", accept: ".txt,text/plain", id: "recovery-file" });
     const fname = el("span", { class: "hint" }, t("key.nofilechosen"));
     const picker = el("div", { class: "row" }, el("label", { class: "btn", for: "recovery-file" }, t("key.pickfile")), fname);
-    const ta = el("textarea", { class: "input mono", autocomplete: "off", spellcheck: "false", placeholder: t("key.seedph") });
+    const ta = el("textarea", { class: "input mono", autocomplete: "off", spellcheck: "false", autocapitalize: "off", placeholder: t("key.seedph") });
     const preview = el("div", { class: "hint mono" });
     const err = el("p", { class: "hint bad" });
     let found = null, timer;
-    const show = (f) => { found = f; preview.textContent = f ? t("key.willbe") + " " + f.did : ""; };
+    const show = (f) => {
+      found = f; preview.textContent = f ? t("key.willbe") + " " + f.did : "";
+      if (f && expect && f.did !== expect) { found = null; preview.textContent = ""; err.textContent = t("sh.mismatch", { got: f.did }); }
+    };
     file.addEventListener("change", async () => {
       show(null); err.textContent = ""; ta.value = "";
       const f = file.files && file.files[0];
@@ -228,25 +236,31 @@ async function restoreFlow() {
         catch (e) { show(null); err.textContent = errText(e); }
       }, 250);
     });
-    const go = el("button", { class: "btn primary", type: "button" }, t("key.restore"));
+    const go = el("button", { class: "btn primary", type: "button" }, expect ? t("sh.go") : t("key.restore"));
     go.addEventListener("click", async () => {
-      if (!found) { err.textContent = t("key.nofile"); return; }
+      if (!found) { if (!err.textContent) err.textContent = t("key.nofile"); return; }
       busy(go, true, t("ui.working"));
       try { ta.value = ""; await adopt(found.seed); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
     });
+    const url = location.origin + location.pathname;
     return [
-      el("h2", {}, t("key.restoretitle")),
-      el("p", { class: "muted" }, t("key.restoredesc")),
+      el("h2", {}, expect ? t("sh.title") : t("key.restoretitle")),
+      el("p", { class: "muted" }, expect ? t("sh.desc") : t("key.restoredesc")),
+      expect ? el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), el("span", { class: "mono" }, didEl(expect)))) : null,
+      expect ? el("div", { class: "callout bad warnlist" }, el("ul", {},
+        el("li", {}, t("sh.warn1", { url })), el("li", {}, t("sh.warn2")), el("li", {}, t("sh.warn3")))) : null,
       el("div", { class: "field" }, el("span", { class: "label" }, t("key.choosefile")), file, picker),
       el("div", { class: "field" }, el("span", { class: "label" }, t("key.orseed")), ta),
       preview,
-      el("div", { class: "callout info" }, t("key.restorenote")),
+      expect ? null : el("div", { class: "callout info" }, t("key.restorenote")),
       err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
     ];
   });
-  if (ok) { toast(t("key.ready")); renderAll(); }
+  if (ok) { toast(expect ? t("sh.done") : t("key.ready")); renderAll(); }
+  return !!ok;
 }
+const restoreFlow = () => importKeyFlow();
 
 // ---- DID mode: a DID someone already has; signing happens in their own terminal ----------
 const DM_KEY = "cc-did-mode";
@@ -269,7 +283,7 @@ async function haveDidFlow() {
       el("h2", {}, t("dm.title")),
       el("p", { class: "muted" }, t("dm.desc")),
       el("div", { class: "field" }, el("label", {}, t("dm.input")), inp),
-      el("div", { class: "callout info" }, t("dm.how")),
+      el("div", { class: "callout info" }, t("dm.how"), " ", t("sh.later")),
       err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
     ];
@@ -293,17 +307,37 @@ function setupSteps() {
     el("p", { class: "hint" }, t("dm.win")));
 }
 /** Show the one command that does `what` in the user's terminal. */
-async function terminalModal(title, desc, cmd, onRan) {
-  await modal((close) => [
-    el("h2", {}, title),
-    el("p", { class: "muted" }, desc),
-    cmdBox(cmd),
-    el("div", { class: "callout info" }, t("dm.seedprompt")),
-    setupSteps(),
-    el("p", { class: "hint" }, t("dm.after")),
-    el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")),
-      onRan ? el("button", { class: "btn primary", type: "button", onclick: () => { onRan(); close(); } }, t("dm.ran")) : null),
-  ]);
+/**
+ * An action for a DID used through the terminal. With `retry`, the person first picks how to sign:
+ * in their terminal (the command below) or here, after loading their key once (then `retry` runs).
+ */
+async function terminalModal({ title, lead, warn, termDesc, cmd, onRan, retry }) {
+  const act = await modal((close) => {
+    const term = el("div", { class: "term-box" }, el("p", { class: "muted" }, termDesc), cmdBox(cmd),
+      el("div", { class: "callout info" }, t("dm.seedprompt")), setupSteps(), el("p", { class: "hint" }, t("dm.after")));
+    const ran = onRan ? el("button", { class: "btn primary", type: "button", onclick: () => { onRan(); close(); } }, t("dm.ran")) : null;
+    let choice = null;
+    if (retry) {
+      term.hidden = true;
+      if (ran) ran.hidden = true;
+      const termCard = el("button", { type: "button", class: "choice-card", "aria-expanded": "false" }, el("b", {}, t("sh.term")), el("span", {}, t("sh.termdesc")));
+      termCard.addEventListener("click", () => {
+        term.hidden = false; if (ran) ran.hidden = false;
+        termCard.classList.add("on"); termCard.setAttribute("aria-expanded", "true");
+      });
+      choice = el("div", { class: "choice" }, termCard,
+        el("button", { type: "button", class: "choice-card", onclick: () => close("here") }, el("b", {}, t("sh.here")), el("span", {}, t("sh.heredesc"))));
+    }
+    return [
+      el("h2", {}, title),
+      lead ? (lead instanceof Node ? lead : el("p", { class: "muted" }, lead)) : null,
+      warn ? el("div", { class: "callout bad" }, warn) : null,
+      retry ? el("p", {}, el("b", {}, t("sh.choose"))) : null,
+      choice, term,
+      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")), ran),
+    ];
+  });
+  if (act === "here" && retry && await importKeyFlow(S.watchDid)) retry();
 }
 
 /** Old password vault from an earlier version: unlock once, then it becomes a device key. */
@@ -346,8 +380,8 @@ async function register(btn) {
   const mode = needKey();
   if (!mode) return;
   if (mode === "terminal") {
-    await terminalModal(t("s2.title"), t("dm.regdesc"), `closecall register --send --as ${S.watchDid}`,
-      () => { journalAdd({ kind: "owner", room: "terminal", sweep: C.nextSweep() }); renderAll(); });
+    await terminalModal({ title: t("s2.title"), termDesc: t("dm.regdesc"), cmd: `closecall register --send --as ${S.watchDid}`,
+      onRan: () => { journalAdd({ kind: "owner", room: "terminal", sweep: C.nextSweep() }); renderAll(); }, retry: () => register(btn) });
     return;
   }
   busy(btn, true, t("ui.signing"));
@@ -424,7 +458,7 @@ async function publishOffer(btn) {
   const band = bandProblem(pC), funds = fundsProblem(f.side, qC, pC);
   if (mode === "terminal") {
     const cmd = `closecall offer ${f.side} ${terms.qty} ${terms.px} --ttl ${Number(f.ttl)}${taker !== "any" ? " --taker " + taker : ""} --post --send --as ${S.watchDid}`;
-    await terminalModal(t("tr.confirmoffer"), t("dm.offerdesc") + (funds ? " " + funds : ""), cmd);
+    await terminalModal({ title: t("tr.confirmoffer"), lead: econNodes(f.side, qC, pC), warn: band || funds, termDesc: t("dm.offerdesc"), cmd, retry: () => publishOffer(btn) });
     return;
   }
   const ok = await modal((close) => [
@@ -459,7 +493,8 @@ async function acceptOffer(o) {
   if (C.nextSweep() > terms.until) { toast(t("tr.expired"), true); return; }
   if (mode === "terminal") {
     const funds = fundsProblem(mySide, C.cents(terms.qty), C.cents(terms.px));
-    await terminalModal(t("tr.confirmaccept"), t("tr.acceptdesc", { qty: terms.qty, px: terms.px }) + " " + t("dm.acceptdesc") + (funds ? " " + funds : ""), `closecall accept ${terms.id} --send --as ${S.watchDid}`);
+    await terminalModal({ title: t("tr.confirmaccept"), lead: t("tr.acceptdesc", { qty: terms.qty, px: terms.px }), warn: funds,
+      termDesc: t("dm.acceptdesc"), cmd: `closecall accept ${terms.id} --send --as ${S.watchDid}`, retry: () => acceptOffer(o) });
     return;
   }
   const qC = C.cents(terms.qty), pC = C.cents(terms.px);
@@ -716,7 +751,9 @@ function renderStart() {
     s1s.append(statusNode(true, t("dm.using")));
     s1.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), didEl(S.watchDid))),
       el("p", { class: "hint" }, t("dm.usingdesc")), setupSteps(),
-      el("div", { class: "row alt" }, el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))));
+      el("div", { class: "row alt" },
+        el("button", { class: "btn small", type: "button", disabled: !S.ed25519, onclick: () => importKeyFlow(S.watchDid) }, t("sh.startbtn")),
+        el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))));
   } else {
     s1s.append(statusNode(false, t("s1.todo")));
     s1.append(
@@ -1053,6 +1090,7 @@ function renderAccount() {
       el("p", { class: "hint" }, S.watchDid && !S.signer ? t("dm.usingdesc") : t("ac.recoverynote")),
       el("div", { class: "row" }, el("button", { class: "btn small", type: "button", onclick: () => copy(did) }, t("ac.copydid")),
         S.signer || S.watchDid ? null : el("a", { class: "btn small primary", href: "#start" }, t("key.unlock")),
+        S.watchDid && !S.signer ? el("button", { class: "btn small", type: "button", disabled: !S.ed25519, onclick: () => importKeyFlow(S.watchDid) }, t("sh.startbtn")) : null,
         S.watchDid && !S.signer ? el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))
           : el("button", { class: "btn small danger ghost", type: "button", onclick: forgetKey }, t("key.forget"))));
   }

@@ -23,8 +23,10 @@ Trading closes on **2026-10-04 at 09:00 UTC**.
 5. **Follow your rank** on **Leaderboard**. Scores are final at the close on 4 October.
 
 Already made a DID with Technocore's tools? Choose **I already have a DID** on **Start** and type
-your public DID. The app then gives you a one-line command to sign each action in your own
-terminal, so your seed never touches the browser.
+your public DID (the `z6Mk…` part is enough). For each action you choose: **sign in your terminal**
+with a one-line command, so your seed never touches the browser, or **sign here** after loading
+your key into the browser once. Only ever enter a seed at
+`https://sprmn24.github.io/technocore-closecall-agent/`; no one needs your seed to help you.
 
 | | |
 |---|---|
@@ -62,10 +64,13 @@ This repository also has a **command-line agent** for automation and power users
   out, this site's own code included. The seed is shown once at creation, to copy or download,
   with warnings not to lose or share it. Restoring on a new device takes the backup file or the seed,
   read locally and never sent anywhere. There is no password.
-- **Existing DIDs sign in the terminal.** "I already have a DID" needs only the public DID. Each
-  action (register, offer, accept) shows one `closecall … --as <did>` command; the CLI asks for the
-  seed in the user's own terminal and refuses if the seed belongs to a different DID. Web and CLI
-  users trade with each other on the same offer board.
+- **Existing DIDs choose how to sign.** "I already have a DID" needs only the public DID. For each
+  action (register, offer, accept) the person picks: **sign in my terminal**, a one-line
+  `closecall … --as <did>` command where the CLI asks for the seed and refuses a seed of any other
+  DID; or **sign here**, loading the key once from the recovery file or seed. That key is refused
+  unless it matches the DID they entered, and is then stored like a key made here (non-extractable).
+  The dialog warns to check the address bar, avoid shared computers, and that no one ever needs
+  their seed. Web and CLI users trade with each other on the same offer board.
 - **Locked down.** The Content-Security-Policy allows scripts only from the site itself and
   network requests only to technocore.chat and Hyperliquid. Every string from the network is
   rendered as text, never as HTML.

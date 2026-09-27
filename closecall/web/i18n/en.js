@@ -411,5 +411,20 @@ export default {
  "am.signout": "Sign out",
  "am.signoutkey": "Signing out removes the key from this browser. To come back, restore it from your recovery file or seed.",
  "am.signoutdid": "Sign out to use a different DID. You can come back any time by entering this one again.",
- "am.signedout": "Signed out"
+ "am.signedout": "Signed out",
+ "sh.choose": "Your key isn't in this browser. How do you want to sign?",
+ "sh.term": "Sign in my terminal",
+ "sh.termdesc": "Run a one-line command. Your seed never leaves your terminal. The safest way.",
+ "sh.here": "Sign here",
+ "sh.heredesc": "Load your key into this browser once. After that, every action is one click.",
+ "sh.title": "Sign here with your DID",
+ "sh.desc": "Load your key into this browser once, from your recovery file or your seed. It is kept so that it can sign here but can't be read back out, not even by this site.",
+ "sh.warn1": "Check that the address bar shows {url}. Never enter your seed anywhere else.",
+ "sh.warn2": "Don't do this on a shared or public computer.",
+ "sh.warn3": "This site never sends your seed anywhere. No one will ever ask you for it; anyone who does is a scammer.",
+ "sh.mismatch": "This seed belongs to {got}, not to your DID. Nothing was saved.",
+ "sh.go": "Load my key",
+ "sh.done": "Key loaded. You now sign here with one click.",
+ "sh.startbtn": "Sign here instead: load my key",
+ "sh.later": "You can also load your key into this browser later, to sign here with one click."
 };

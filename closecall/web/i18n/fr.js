@@ -411,5 +411,20 @@ export default {
  "am.signout": "Se déconnecter",
  "am.signoutkey": "Se déconnecter supprime la clé de ce navigateur. Pour revenir, restaurez-la depuis votre fichier de récupération ou votre seed.",
  "am.signoutdid": "Déconnectez-vous pour utiliser un autre DID. Vous pouvez revenir à tout moment en saisissant de nouveau celui-ci.",
- "am.signedout": "Déconnecté"
+ "am.signedout": "Déconnecté",
+ "sh.choose": "Votre clé n'est pas dans ce navigateur. Comment voulez-vous signer ?",
+ "sh.term": "Signer dans mon terminal",
+ "sh.termdesc": "Lancez une commande d'une ligne. Votre seed ne quitte jamais votre terminal. Le moyen le plus sûr.",
+ "sh.here": "Signer ici",
+ "sh.heredesc": "Chargez votre clé dans ce navigateur une fois. Ensuite, chaque action se fait en un clic.",
+ "sh.title": "Signer ici avec votre DID",
+ "sh.desc": "Chargez votre clé dans ce navigateur une fois, depuis votre fichier de récupération ou votre seed. Elle est gardée de façon à pouvoir signer ici sans pouvoir être relue, même par ce site.",
+ "sh.warn1": "Vérifiez que la barre d'adresse affiche {url}. Ne saisissez jamais votre seed ailleurs.",
+ "sh.warn2": "Ne le faites pas sur un ordinateur partagé ou public.",
+ "sh.warn3": "Ce site n'envoie votre seed nulle part. Personne ne vous la demandera jamais ; quiconque le fait est un escroc.",
+ "sh.mismatch": "Cette seed appartient à {got}, pas à votre DID. Rien n'a été enregistré.",
+ "sh.go": "Charger ma clé",
+ "sh.done": "Clé chargée. Vous signez désormais ici en un clic.",
+ "sh.startbtn": "Signer ici plutôt : charger ma clé",
+ "sh.later": "Vous pourrez aussi charger votre clé dans ce navigateur plus tard, pour signer ici en un clic."
 };

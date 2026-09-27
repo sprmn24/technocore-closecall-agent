@@ -411,5 +411,20 @@ export default {
  "am.signout": "Sair",
  "am.signoutkey": "Sair remove a chave deste navegador. Para voltar, restaure-a com seu arquivo de recuperação ou sua seed.",
  "am.signoutdid": "Saia para usar outro DID. Você pode voltar quando quiser digitando este DID de novo.",
- "am.signedout": "Você saiu"
+ "am.signedout": "Você saiu",
+ "sh.choose": "Sua chave não está neste navegador. Como você quer assinar?",
+ "sh.term": "Assinar no meu terminal",
+ "sh.termdesc": "Rode um comando de uma linha. Sua seed nunca sai do seu terminal. O jeito mais seguro.",
+ "sh.here": "Assinar aqui",
+ "sh.heredesc": "Carregue sua chave neste navegador uma vez. Depois, cada ação é um clique.",
+ "sh.title": "Assinar aqui com seu DID",
+ "sh.desc": "Carregue sua chave neste navegador uma vez, pelo arquivo de recuperação ou pela seed. Ela fica guardada de forma que assina aqui mas não pode ser lida de volta, nem por este site.",
+ "sh.warn1": "Confira se a barra de endereço mostra {url}. Nunca digite sua seed em outro lugar.",
+ "sh.warn2": "Não faça isso em um computador compartilhado ou público.",
+ "sh.warn3": "Este site nunca envia sua seed para lugar nenhum. Ninguém vai pedi-la; quem pedir é golpista.",
+ "sh.mismatch": "Esta seed pertence a {got}, não ao seu DID. Nada foi salvo.",
+ "sh.go": "Carregar minha chave",
+ "sh.done": "Chave carregada. Agora você assina aqui com um clique.",
+ "sh.startbtn": "Assinar aqui: carregar minha chave",
+ "sh.later": "Você também pode carregar sua chave neste navegador depois, para assinar aqui com um clique."
 };

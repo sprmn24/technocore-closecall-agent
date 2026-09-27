@@ -263,7 +263,7 @@ details.group summary { cursor: pointer; color: var(--text); }
 .choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .choice-card { font: inherit; text-align: start; border-radius: 14px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text); padding: 16px 18px; cursor: pointer; display: grid; gap: 4px; }
 .choice-card b { font-size: 16.5px; } .choice-card span { color: var(--text-2); font-size: 13.5px; }
-.choice-card:hover { border-color: var(--accent); }
+.choice-card:hover, .choice-card.on { border-color: var(--accent); }
 .choice-card.primary-card { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .choice-card.primary-card span { color: color-mix(in srgb, var(--accent-ink) 85%, transparent); }
 .choice-card[disabled] { opacity: .5; cursor: not-allowed; }

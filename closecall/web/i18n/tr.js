@@ -411,5 +411,20 @@ export default {
  "am.signout": "Çıkış yap",
  "am.signoutkey": "Çıkış yapınca anahtar bu tarayıcıdan silinir. Geri dönmek için kurtarma dosyandan ya da seed'inden geri yükle.",
  "am.signoutdid": "Başka bir DID kullanmak için çıkış yap. Bu DID'i tekrar yazarak istediğin zaman geri dönebilirsin.",
- "am.signedout": "Çıkış yapıldı"
+ "am.signedout": "Çıkış yapıldı",
+ "sh.choose": "Anahtarın bu tarayıcıda değil. Nasıl imzalamak istersin?",
+ "sh.term": "Terminalimde imzala",
+ "sh.termdesc": "Tek satırlık bir komut çalıştırırsın. Seed'in terminalinden hiç çıkmaz. En güvenli yol.",
+ "sh.here": "Burada imzala",
+ "sh.heredesc": "Anahtarını bu tarayıcıya bir kez yüklersin. Sonrasında her işlem tek tık.",
+ "sh.title": "DID'inle burada imzala",
+ "sh.desc": "Anahtarını kurtarma dosyandan ya da seed'inden bu tarayıcıya bir kez yükle. Burada imza atabilecek şekilde saklanır ama dışarı okunamaz, bu site bile okuyamaz.",
+ "sh.warn1": "Adres çubuğunda {url} yazdığını kontrol et. Seed'ini başka hiçbir yere girme.",
+ "sh.warn2": "Bunu ortak kullanılan ya da herkese açık bir bilgisayarda yapma.",
+ "sh.warn3": "Bu site seed'ini hiçbir yere göndermez. Kimse senden seed istemez; isteyen dolandırıcıdır.",
+ "sh.mismatch": "Bu seed {got} anahtarına ait, senin DID'ine değil. Hiçbir şey kaydedilmedi.",
+ "sh.go": "Anahtarımı yükle",
+ "sh.done": "Anahtar yüklendi. Artık burada tek tıkla imzalarsın.",
+ "sh.startbtn": "Burada imzala: anahtarımı yükle",
+ "sh.later": "İstersen daha sonra anahtarını bu tarayıcıya yükleyip burada tek tıkla da imzalayabilirsin."
 };
