@@ -22,7 +22,7 @@ This repository gives anyone a way in, including people who have never touched T
 
 | Tab | What it does |
 |---|---|
-| **Start** | Three steps: "Start playing" (one click: a key and a recovery file), register, make a first trade |
+| **Start** | Two ways in. **Create a new DID**: one click, the seed is shown once with copy/download and clear warnings. **I already have a DID**: enter your public DID; the site shows your account and gives you a one-line `closecall` command for every action, so your seed stays in your own terminal. Then register and make a first trade |
 | **Trade** | Publish a signed offer (buy/sell, price, size, validity) with fee, collateral, break-even and P&L scenarios; browse the offer board and accept other players' offers |
 | **My account** | Your key, an estimated position and P&L, and every message you signed with its referee outcome |
 | **Leaderboard** | The referee's top 25 with prize places, tied keys grouped (ties share the places they span), your rank, search by did:key |
@@ -33,14 +33,15 @@ This repository gives anyone a way in, including people who have never touched T
 
 - **No server.** The page is static and runs on GitHub Pages. Your browser talks to
   `technocore.chat` and `api.hyperliquid.xyz` directly and checks every signature itself.
-- **No password, no seed entry.** The key is generated with WebCrypto and kept in IndexedDB as a
-  *non-extractable* `CryptoKey`: it signs in this browser, but nothing can read it out, this site's
-  own code included. The only backup is a recovery file downloaded once at creation (Safari clears
-  site data after 7 days without a visit, so the file matters). Restoring means picking that file,
-  which is read locally and never uploaded. The site has no field for pasting a seed or private key,
-  so "paste your seed" is always a scam signal. Players with an existing Technocore key don't need
-  it, since any `did:key` can play; if they want to use it, the CLI keeps it in their own terminal.
-  Password vaults from earlier versions are unlocked once and moved over.
+- **Keys stay where they were made.** A new DID's key is generated with WebCrypto and kept in
+  IndexedDB as a *non-extractable* `CryptoKey`: it signs in this browser, but nothing can read it
+  out, this site's own code included. The seed is shown once at creation, to copy or download,
+  with warnings not to lose or share it. Restoring on a new device takes the backup file or the seed,
+  read locally and never sent anywhere. There is no password.
+- **Existing DIDs sign in the terminal.** "I already have a DID" needs only the public DID. Each
+  action (register, offer, accept) shows one `closecall … --as <did>` command; the CLI asks for the
+  seed in the user's own terminal and refuses if the seed belongs to a different DID. Web and CLI
+  users trade with each other on the same offer board.
 - **Locked down.** The Content-Security-Policy allows scripts only from the site itself and
   network requests only to technocore.chat and Hyperliquid. Every string from the network is
   rendered as text, never as HTML.
@@ -90,11 +91,12 @@ closecall quote
 closecall plan buy 40 224.40
 closecall offer sell 5 224.60 --post --send      # to closecall-desk
 closecall watch --mine                           # offers/trades on the desk
-closecall accept offer.json --send               # trade to close1 (+ copy to the desk)
+closecall accept <offer-id> --send               # trade to close1 (+ copy to the desk)
 closecall status                                 # mint and trade outcomes, where listed
 ```
 
-Every write is a dry run unless you pass `--send`. The seed is read from `$SIGN_SEED` or a
+Every write is a dry run unless you pass `--send`. Add `--as <did>` to make a command refuse to
+sign with any other key (the web app's commands always include it). The seed is read from `$SIGN_SEED` or a
 hidden prompt and is never written to disk.
 
 ## Development
@@ -126,6 +128,7 @@ Apache-2.0.
 
 Technocore **Close Call** yarışmasına tarayıcıdan katılmak için gayriresmî ve açık kaynak bir araç.
 Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: "Oynamaya başla" ile tek tıkta anahtar ve
-kurtarma dosyası oluştur, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et. Şifre yok; site
-hiçbir zaman seed ya da özel anahtar istemez. Liderlik sekmesinde ödül sıraları ve kendi sıran görünür. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
+seed'ini (bir kez gösterilir, kopyala/indir) al, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et.
+Terminalde DID üretmiş olanlar "Zaten bir DID'im var" ile sadece açık DID'lerini girer; her işlem için
+site tek satırlık bir komut verir ve seed kendi terminallerinde kalır. Liderlik sekmesinde ödül sıraları ve kendi sıran görünür. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
 Arapça, Türkçe ve Fransızca. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.

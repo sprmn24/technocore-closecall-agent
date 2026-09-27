@@ -5,7 +5,8 @@ import { STRINGS, HTML_LANG, RTL } from "./i18n.js";
 // ---- state -------------------------------------------------------------------------------
 const S = {
   lang: "en",
-  signer: null,           // {did, sign} while unlocked
+  signer: null,           // {did, sign} for a key held in this browser
+  watchDid: null,         // a DID used from the terminal (DID mode)
   vault: C.loadVault(),
   price: null,            // latest referee price post
   hl: null,               // latest Hyperliquid trade
@@ -106,7 +107,7 @@ function busy(btn, on, label) {
 }
 
 // ---- journal: what this browser signed ----------------------------------------------------
-const jKey = () => `cc-journal:${S.signer ? S.signer.did : S.vault ? S.vault.did : "-"}`;
+const jKey = () => `cc-journal:${myDid() || "-"}`;
 function journal() { try { return JSON.parse(localStorage.getItem(jKey()) || "[]"); } catch { return []; } }
 function journalAdd(e) {
   const j = journal();
@@ -115,7 +116,7 @@ function journalAdd(e) {
   try { localStorage.setItem(jKey(), JSON.stringify(j.slice(-500))); } catch { /* full */ }
 }
 const registered = () => journal().some((e) => e.kind === "owner");
-const myDid = () => (S.signer ? S.signer.did : S.vault ? S.vault.did : null);
+const myDid = () => (S.signer ? S.signer.did : S.vault ? S.vault.did : S.watchDid);
 
 // ---- key management ----------------------------------------------------------------------
 // ---- key management ----------------------------------------------------------------------
@@ -128,6 +129,7 @@ async function adopt(seed) {
   await C.storeDeviceKey(signer);
   if (S.vault && S.vault.did === signer.did) { C.forgetVault(); S.vault = null; }
   S.signer = signer;
+  setWatch(null);
 }
 
 function recoveryText(seedHex, did) {
@@ -167,22 +169,24 @@ async function createKeyFlow() {
     const saved = el("input", { type: "checkbox" });
     const finish = el("button", { class: "btn primary", type: "button", disabled: true }, t("key.finish"));
     saved.addEventListener("change", () => { finish.disabled = !saved.checked; });
-    const dl = el("button", { class: "btn primary big wide", type: "button" }, "⭳ " + t("key.download"));
-    dl.addEventListener("click", () => { download(recoveryName(signer.did), recoveryText(seedHex, signer.did)); saved.checked = true; finish.disabled = false; });
     finish.addEventListener("click", async () => {
       busy(finish, true, t("ui.working"));
       try { await adopt(seed); close(true); } catch (e) { err.textContent = errText(e); busy(finish, false); }
     });
     return [
-      el("h2", {}, t("key.savetitle")),
-      el("p", { class: "muted" }, t("key.savedesc")),
-      el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), el("span", { class: "mono" }, signer.did))),
-      dl,
-      el("div", { class: "callout warn" }, t("key.seedwarn")),
-      el("label", { class: "check" }, saved, el("span", {}, t("key.saved"))),
-      el("details", {}, el("summary", { class: "hint" }, t("key.advanced")),
-        el("p", { class: "hint" }, t("key.yourseed")), el("div", { class: "secret" }, seedHex),
-        el("button", { class: "btn small", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed"))),
+      el("h2", {}, t("key.newdid")),
+      el("p", { class: "muted" }, t("key.newdiddesc")),
+      el("div", { class: "label" }, t("key.yourdid")),
+      el("div", { class: "row" }, el("span", { class: "mono grow" }, signer.did), el("button", { class: "btn small", type: "button", onclick: () => copy(signer.did) }, t("ac.copydid"))),
+      el("div", { class: "label" }, t("key.seedlabel")),
+      el("div", { class: "secret" }, seedHex),
+      el("div", { class: "row" },
+        el("button", { class: "btn primary", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed")),
+        el("button", { class: "btn", type: "button", onclick: () => download(recoveryName(signer.did), recoveryText(seedHex, signer.did)) }, "⭳ " + t("key.download"))),
+      el("div", { class: "callout bad warnlist" },
+        el("b", {}, t("key.warntitle")),
+        el("ul", {}, el("li", {}, t("key.warn1")), el("li", {}, t("key.warn2")), el("li", {}, t("key.warn3")))),
+      el("label", { class: "check" }, saved, el("span", {}, t("key.savedseed"))),
       err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), finish),
     ];
@@ -197,33 +201,104 @@ async function restoreFlow() {
     const file = el("input", { class: "sr", type: "file", accept: ".txt,text/plain", id: "recovery-file" });
     const fname = el("span", { class: "hint" }, t("key.nofilechosen"));
     const picker = el("div", { class: "row" }, el("label", { class: "btn", for: "recovery-file" }, t("key.pickfile")), fname);
+    const ta = el("textarea", { class: "input mono", autocomplete: "off", spellcheck: "false", placeholder: t("key.seedph") });
     const preview = el("div", { class: "hint mono" });
     const err = el("p", { class: "hint bad" });
-    let found = null;
+    let found = null, timer;
+    const show = (f) => { found = f; preview.textContent = f ? t("key.willbe") + " " + f.did : ""; };
     file.addEventListener("change", async () => {
-      found = null; preview.textContent = ""; err.textContent = "";
+      show(null); err.textContent = ""; ta.value = "";
       const f = file.files && file.files[0];
       fname.textContent = f ? f.name : t("key.nofilechosen");
       if (!f) return;
       if (f.size > 20_000) { err.textContent = t("key.badfile"); return; }
-      try { found = await seedFromRecovery(await f.text()); preview.textContent = t("key.willbe") + " " + found.did; }
-      catch (e) { err.textContent = e.message; }
+      try { show(await seedFromRecovery(await f.text())); } catch (e) { err.textContent = e.message; }
+    });
+    ta.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        err.textContent = ""; const v = ta.value.trim();
+        if (!v) { show(null); return; }
+        try { const seed = await C.seedFromInput(v); const sg = await C.signerFromSeed(C.hexToBytes(C.bytesToHex(seed))); show({ seed, did: sg.did }); }
+        catch (e) { show(null); err.textContent = errText(e); }
+      }, 250);
     });
     const go = el("button", { class: "btn primary", type: "button" }, t("key.restore"));
     go.addEventListener("click", async () => {
       if (!found) { err.textContent = t("key.nofile"); return; }
       busy(go, true, t("ui.working"));
-      try { await adopt(found.seed); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
+      try { ta.value = ""; await adopt(found.seed); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
     });
     return [
       el("h2", {}, t("key.restoretitle")),
       el("p", { class: "muted" }, t("key.restoredesc")),
-      el("div", { class: "field" }, el("span", { class: "label" }, t("key.choosefile")), file, picker, preview),
+      el("div", { class: "field" }, el("span", { class: "label" }, t("key.choosefile")), file, picker),
+      el("div", { class: "field" }, el("span", { class: "label" }, t("key.orseed")), ta),
+      preview,
+      el("div", { class: "callout info" }, t("key.restorenote")),
       err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
     ];
   });
   if (ok) { toast(t("key.ready")); renderAll(); }
+}
+
+// ---- DID mode: a DID someone already has; signing happens in their own terminal ----------
+const DM_KEY = "cc-did-mode";
+function loadWatch() { try { const v = localStorage.getItem(DM_KEY); return v && C.DID_RE.test(v) ? v : null; } catch { return null; } }
+function setWatch(did) { try { did ? localStorage.setItem(DM_KEY, did) : localStorage.removeItem(DM_KEY); } catch { /* ignore */ } S.watchDid = did; }
+
+async function haveDidFlow() {
+  const ok = await modal((close) => {
+    const inp = el("input", { class: "input mono", placeholder: "did:key:z6Mk…", autocomplete: "off", spellcheck: "false" });
+    const err = el("p", { class: "hint bad" });
+    const go = el("button", { class: "btn primary", type: "button" }, t("dm.go"));
+    const submit = () => {
+      const v = inp.value.trim();
+      if (!C.DID_RE.test(v)) { err.textContent = t("dm.bad"); return; }
+      setWatch(v); close(true);
+    };
+    go.addEventListener("click", submit);
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    return [
+      el("h2", {}, t("dm.title")),
+      el("p", { class: "muted" }, t("dm.desc")),
+      el("div", { class: "field" }, el("label", {}, t("dm.input")), inp),
+      el("div", { class: "callout info" }, t("dm.how")),
+      err,
+      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
+    ];
+  });
+  if (ok) { toast(t("dm.ready")); renderAll(); }
+}
+
+const INSTALL_CMD = 'pip install "git+https://github.com/sprmn24/technocore-closecall-agent"';
+function cmdBox(cmd) {
+  // One unbreakable span per argument (a browser would otherwise wrap "--send" after its first "-");
+  // only a long did:key may break inside. The copy button copies the exact string.
+  const parts = cmd.split(" ").flatMap((tok, i) => [i ? " " : null, el("span", { class: tok.length > 30 ? "tok long" : "tok" }, tok)]);
+  return el("div", { class: "cmd" }, el("code", { class: "mono" }, parts),
+    el("button", { class: "btn small", type: "button", onclick: () => copy(cmd) }, t("dm.copycmd")));
+}
+function setupSteps() {
+  return el("details", { class: "setup" }, el("summary", {}, t("dm.setup")),
+    el("ol", { class: "setup-list" },
+      el("li", {}, t("dm.step1"), cmdBox(INSTALL_CMD)),
+      el("li", {}, t("dm.step2"), cmdBox(`closecall did`), el("p", { class: "hint" }, t("dm.step2note")))),
+    el("p", { class: "hint" }, t("dm.win")));
+}
+/** Show the one command that does `what` in the user's terminal. */
+async function terminalModal(title, desc, cmd, onRan) {
+  await modal((close) => [
+    el("h2", {}, title),
+    el("p", { class: "muted" }, desc),
+    cmdBox(cmd),
+    el("div", { class: "callout info" }, t("dm.seedprompt")),
+    setupSteps(),
+    el("p", { class: "hint" }, t("dm.after")),
+    el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")),
+      onRan ? el("button", { class: "btn primary", type: "button", onclick: () => { onRan(); close(); } }, t("dm.ran")) : null),
+  ]);
 }
 
 /** Old password vault from an earlier version: unlock once, then it becomes a device key. */
@@ -253,15 +328,23 @@ async function forgetKey() {
 }
 
 // ---- actions -----------------------------------------------------------------------------
+/** true: sign here; "terminal": DID mode, hand the user a command; false: no identity yet. */
 function needKey() {
   if (S.signer) return true;
+  if (S.watchDid) return "terminal";
   toast(S.vault ? t("key.needunlock") : t("key.needkey"), true);
   location.hash = "#start";
   return false;
 }
 
 async function register(btn) {
-  if (!needKey()) return;
+  const mode = needKey();
+  if (!mode) return;
+  if (mode === "terminal") {
+    await terminalModal(t("s2.title"), t("dm.regdesc"), `closecall register --send --as ${S.watchDid}`,
+      () => { journalAdd({ kind: "owner", room: "terminal", sweep: C.nextSweep() }); renderAll(); });
+    return;
+  }
   busy(btn, true, t("ui.signing"));
   try {
     const rec = await C.postSigned(S.signer, C.TRADING_ROOM, C.ownerMsg(S.signer.did));
@@ -311,17 +394,23 @@ function econNodes(mySide, qC, pC) {
 }
 
 async function publishOffer(btn) {
-  if (!needKey()) return;
+  const mode = needKey();
+  if (!mode) return;
   const f = S.form, qC = C.cents(f.qty), pC = C.cents(f.px);
   const taker = f.taker.trim() || "any";
   let terms;
   try {
     if (!qC || !pC) throw new Error(t("tr.badnum"));
     if (taker !== "any" && !C.DID_RE.test(taker)) throw new Error(t("tr.badtaker"));
-    terms = { id: C.newTradeId(), maker: S.signer.did, px: C.fromCents(pC), qty: C.fromCents(qC), side: f.side, taker, until: C.nextSweep() + Number(f.ttl) - 1 };
+    terms = { id: C.newTradeId(), maker: myDid(), px: C.fromCents(pC), qty: C.fromCents(qC), side: f.side, taker, until: C.nextSweep() + Number(f.ttl) - 1 };
     const p = C.termsProblem(terms); if (p) throw new Error(p);
   } catch (e) { toast(e.message, true); return; }
   const band = bandProblem(pC);
+  if (mode === "terminal") {
+    const cmd = `closecall offer ${f.side} ${terms.qty} ${terms.px} --ttl ${Number(f.ttl)}${taker !== "any" ? " --taker " + taker : ""} --post --send --as ${S.watchDid}`;
+    await terminalModal(t("tr.confirmoffer"), t("dm.offerdesc"), cmd);
+    return;
+  }
   const ok = await modal((close) => [
     el("h2", {}, t("tr.confirmoffer")),
     econNodes(f.side, qC, pC),
@@ -346,9 +435,14 @@ async function publishOffer(btn) {
 }
 
 async function acceptOffer(o) {
-  if (!needKey()) return;
+  const mode = needKey();
+  if (!mode) return;
   const terms = o.terms, mySide = terms.side === "buy" ? "sell" : "buy";
   if (C.nextSweep() > terms.until) { toast(t("tr.expired"), true); return; }
+  if (mode === "terminal") {
+    await terminalModal(t("tr.confirmaccept"), t("tr.acceptdesc", { qty: terms.qty, px: terms.px }) + " " + t("dm.acceptdesc"), `closecall accept ${terms.id} --send --as ${S.watchDid}`);
+    return;
+  }
   const qC = C.cents(terms.qty), pC = C.cents(terms.px);
   const band = bandProblem(pC);
   const ok = await modal((close) => [
@@ -402,10 +496,14 @@ async function loadDesk() {
         if ((await C.checkTrade(o)) === null) {
           filled.add(o.terms.id);
           if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, taker: o.taker, role: "maker" });
+          if (myDid() && o.taker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, taker: o.taker, role: "taker" });
         }
       } else if (o.t === "offer") {
         if (m.from !== o.terms?.maker) continue; // posted by someone else than the maker: ignore
-        if ((await C.checkOffer(o)) === null) offers.push({ ...o, seq: m.seq, ts: m.ts });
+        if ((await C.checkOffer(o)) === null) {
+          offers.push({ ...o, seq: m.seq, ts: m.ts });
+          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "offer", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, maker_sig: o.maker_sig, role: "maker" });
+        }
       }
     }
     S.desk = { offers, filled, at: Date.now(), error: null };
@@ -506,6 +604,7 @@ function renderTicker() {
 function renderWallet() {
   const w = clear($("wallet-chip"));
   if (S.signer) w.append(el("span", { class: "dot good" }), didEl(S.signer.did));
+  else if (S.watchDid) w.append(el("span", { class: "dot good" }), didEl(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"));
   else if (S.vault) w.append(el("span", { class: "dot warn" }), t("wl.locked"));
   else w.append(el("span", { class: "dot" }), t("wl.none"));
 }
@@ -517,7 +616,7 @@ function renderStart() {
   $("start-lock").textContent = dur(C.sweepTime(C.LOCK_SWEEP) - Date.now());
   // step 1
   const s1 = clear($("s1-body")), s1s = clear($("s1-status"));
-  $("step-key").classList.toggle("done", !!S.signer);
+  $("step-key").classList.toggle("done", !!(S.signer || S.watchDid));
   if (S.signer) {
     s1s.append(statusNode(true, t("s1.ready")));
     s1.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), didEl(S.signer.did))),
@@ -532,20 +631,28 @@ function renderStart() {
     s1.append(el("p", { class: "muted" }, t("key.lockeddesc"), " ", didEl(S.vault.did)), el("div", { class: "row" }, el("div", { class: "field" }, pw), go), err,
       el("div", { class: "row alt" }, el("button", { class: "btn small ghost", type: "button", onclick: restoreFlow }, t("key.have")),
         el("button", { class: "btn small ghost", type: "button", onclick: forgetKey }, t("key.other"))));
+  } else if (S.watchDid) {
+    s1s.append(statusNode(true, t("dm.using")));
+    s1.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), didEl(S.watchDid))),
+      el("p", { class: "hint" }, t("dm.usingdesc")), setupSteps(),
+      el("div", { class: "row alt" }, el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))));
   } else {
     s1s.append(statusNode(false, t("s1.todo")));
     s1.append(
-      el("button", { class: "btn primary big", type: "button", onclick: createKeyFlow, disabled: !S.ed25519 }, t("key.create")),
-      el("p", { class: "hint cta-hint" }, t("key.createdesc")),
-      el("div", { class: "row alt" }, el("button", { class: "btn ghost small", type: "button", onclick: restoreFlow, disabled: !S.ed25519 }, t("key.have")), el("span", { class: "hint" }, t("key.havedesc"))),
-      el("details", { class: "cli-note" }, el("summary", { class: "hint" }, t("key.clisum")), el("p", { class: "hint" }, t("key.clinote"))));
+      el("div", { class: "choice" },
+        el("button", { type: "button", class: "choice-card primary-card", onclick: createKeyFlow, disabled: !S.ed25519 },
+          el("b", {}, t("key.createbtn")), el("span", {}, t("key.createbtndesc"))),
+        el("button", { type: "button", class: "choice-card", onclick: haveDidFlow },
+          el("b", {}, t("key.havedid")), el("span", {}, t("key.havediddesc")))),
+      el("div", { class: "row alt" }, el("button", { class: "btn ghost small", type: "button", onclick: restoreFlow, disabled: !S.ed25519 }, t("key.have")), el("span", { class: "hint" }, t("key.havedesc"))));
   }
   // step 2
   const s2 = clear($("s2-body")), s2s = clear($("s2-status"));
   const reg = registered();
-  $("step-register").classList.toggle("done", reg && !!S.signer);
-  $("step-register").classList.toggle("locked", !S.signer);
-  if (!S.signer) { s2s.append(statusNode(false, t("s2.needkey"))); }
+  const who = S.signer || S.watchDid;
+  $("step-register").classList.toggle("done", reg && !!who);
+  $("step-register").classList.toggle("locked", !who);
+  if (!who) { s2s.append(statusNode(false, t("s2.needkey"))); }
   else if (reg) {
     const e = journal().find((x) => x.kind === "owner");
     s2s.append(statusNode(true, t("s2.done")));
@@ -561,8 +668,8 @@ function renderStart() {
   }
   // step 3
   const traded = journal().some((x) => x.kind === "offer" || x.kind === "trade");
-  $("step-trade").classList.toggle("done", traded && !!S.signer);
-  $("step-trade").classList.toggle("locked", !reg || !S.signer);
+  $("step-trade").classList.toggle("done", traded && !!who);
+  $("step-trade").classList.toggle("locked", !reg || !who);
   clear($("s3-status")).append(statusNode(traded, traded ? t("s3.done") : t("s3.todo")));
 }
 
@@ -588,7 +695,7 @@ function renderOfferForm() {
     f.qty = qty.value; f.px = px.value; f.ttl = ttl.value; f.taker = taker.value;
     clear(summary); clear(warn);
     if (!qC || !pc || qC < 10n) { warn.append(el("div", { class: "hint bad" }, t("tr.badnum"))); go.disabled = true; return; }
-    go.disabled = !S.signer;
+    go.disabled = !(S.signer || S.watchDid);
     summary.append(econNodes(f.side, qC, pc));
     const b = bandProblem(pc); if (b) warn.append(el("div", { class: "callout bad" }, b));
     const need = qC * pc * 101n / 10_000n;
@@ -610,7 +717,8 @@ function renderOfferForm() {
     el("div", { class: "row" }, el("div", { class: "field" }, el("label", {}, t("tr.valid")), ttl)),
     el("details", {}, el("summary", { class: "hint" }, t("tr.advanced")), el("div", { class: "field" }, el("label", {}, t("tr.onlyfor")), taker)),
     summary, warn, go,
-    ...(S.signer ? [] : [el("p", { class: "hint" }, t("key.needkey"))]),
+    ...(S.signer || S.watchDid ? [] : [el("p", { class: "hint" }, t("key.needkey"))]),
+    ...(S.watchDid && !S.signer ? [el("p", { class: "hint" }, t("dm.formhint"))] : []),
   );
   update();
 }
@@ -630,7 +738,7 @@ function renderBoard() {
       return el("tr", {}, el("td", {}, didEl(o.terms.maker)), el("td", {}, el("span", { class: mine + "-t" }, mine === "buy" ? t("tr.buy") : t("tr.sell"))),
         el("td", { class: "r num" }, o.terms.qty), el("td", { class: "r num" }, o.terms.px),
         el("td", { class: "num" }, dur(C.sweepTime(o.terms.until) - Date.now())),
-        el("td", {}, el("button", { class: "btn small primary", type: "button", onclick: () => acceptOffer(o), disabled: !S.signer }, t("tr.accept"))));
+        el("td", {}, el("button", { class: "btn small primary", type: "button", onclick: () => acceptOffer(o), disabled: !(S.signer || S.watchDid) }, t("tr.accept"))));
     })))));
   const mineBox = clear($("my-offers"));
   const mineRows = journal().filter((e) => e.kind === "offer" && e.terms).reverse().slice(0, 20);
@@ -695,11 +803,12 @@ function renderAccount() {
   if (!did) { k.append(el("p", { class: "muted" }, t("key.needkey")), el("a", { class: "btn primary", href: "#start" }, t("nav.start"))); }
   else {
     k.append(el("div", { class: "kvlist" }, el("div", {}, el("span", {}, "DID"), el("span", { class: "mono" }, did)),
-      el("div", {}, el("span", {}, t("ac.state")), el("span", {}, S.signer ? t("s1.ready") : t("wl.locked")))),
-      el("p", { class: "hint" }, t("ac.recoverynote")),
+      el("div", {}, el("span", {}, t("ac.state")), el("span", {}, S.signer ? t("s1.ready") : S.watchDid ? t("dm.using") : t("wl.locked")))),
+      el("p", { class: "hint" }, S.watchDid && !S.signer ? t("dm.usingdesc") : t("ac.recoverynote")),
       el("div", { class: "row" }, el("button", { class: "btn small", type: "button", onclick: () => copy(did) }, t("ac.copydid")),
-        S.signer ? null : el("a", { class: "btn small primary", href: "#start" }, t("key.unlock")),
-        el("button", { class: "btn small danger ghost", type: "button", onclick: forgetKey }, t("key.forget"))));
+        S.signer || S.watchDid ? null : el("a", { class: "btn small primary", href: "#start" }, t("key.unlock")),
+        S.watchDid && !S.signer ? el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))
+          : el("button", { class: "btn small danger ghost", type: "button", onclick: forgetKey }, t("key.forget"))));
   }
   const L = estimateLedger();
   const pos = Number(L.pos) / 100;
@@ -981,6 +1090,7 @@ async function boot() {
   $("lb-search").addEventListener("input", renderLeaders);
   S.ed25519 = await C.ed25519Supported();
   S.signer = await C.loadDeviceKey();
+  S.watchDid = S.signer ? null : loadWatch();
   addEventListener("hashchange", route);
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => S.view === "market" && renderCharts(), 150); });
   route();

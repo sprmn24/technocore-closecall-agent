@@ -238,3 +238,46 @@ class LiveVector(unittest.TestCase):
         self.assertIsNone(P.check_trade(obj))
         obj["terms"]["qty"] = "44.00"
         self.assertEqual(P.check_trade(obj), "maker signature does not verify")
+
+
+class AsDidAndDeskLookup(unittest.TestCase):
+    def setUp(self):
+        from closecall import cli, net
+        self.cli, self.net = cli, net
+        self.saved = {k: getattr(net, k) for k in ("read_room",)}
+        os.environ["SIGN_SEED"] = "11" * 32
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(self.net, k, v)
+        os.environ.pop("SIGN_SEED", None)
+
+    def test_as_refuses_other_did(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.cli.main(["register", "--as", DB])
+        self.assertIn("refusing", str(cm.exception))
+
+    def test_as_accepts_own_did(self):
+        import io
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.cli.main(["register", "--as", DA])
+        self.assertTrue(json.loads(buf.getvalue())["dry_run"])
+
+    def test_accept_by_offer_id_from_desk(self):
+        import io
+        from contextlib import redirect_stdout
+        t = P.make_terms(DB, "sell", "1", "180.00", "any", P.next_sweep() + 5, "deskid1")
+        offer = P.offer_msg(t, keys.sign(B, P.maker_payload(t)))
+        forged = json.loads(offer)
+        forged["terms"]["px"] = "1.00"  # a tampered copy posted later by someone else must not be picked
+        msgs = [{"seq": 1, "ts": "t", "from": DB, "nonce": 1, "text": offer},
+                {"seq": 2, "ts": "t", "from": DA, "nonce": 2, "text": json.dumps(forged)}]
+        self.net.read_room = lambda room, **kw: {"messages": msgs}
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.cli.main(["accept", "deskid1", "--offline", "--as", DA])
+        trade = json.loads(buf.getvalue())["trade"]
+        self.assertEqual(trade["terms"]["px"], "180.00")
+        self.assertIsNone(P.check_trade(trade))

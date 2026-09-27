@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -25,9 +26,15 @@ def out(obj) -> None:
     print(json.dumps(obj, indent=2, ensure_ascii=False, default=str))
 
 
-def _me():
+def _me(expect: str | None = None):
+    """The signing key; with `expect` (--as), refuse unless it is that did:key."""
+    if expect is not None and not keys.DID_RE.fullmatch(expect):
+        raise SystemExit(f"--as: not an Ed25519 did:key: {expect!r}")
     k = keys.load_key()
-    return k, keys.did_of(k)
+    did = keys.did_of(k)
+    if expect is not None and did != expect:
+        raise SystemExit(f"refusing: this seed is {did}, not {expect} (--as). Nothing was signed.")
+    return k, did
 
 
 def _post(key, did: str, room: str, text: str, send: bool) -> dict:
@@ -142,19 +149,19 @@ def cmd_quote(a) -> None:
 
 
 def cmd_register(a) -> None:
-    key, did = _me()
+    key, did = _me(getattr(a, "as_did", None))
     out(_post(key, did, a.room, P.owner_msg(did), a.send))
 
 
 def cmd_register_room(a) -> None:
     if a.name in P.REFEREE_ROOMS or a.name in P.CONTEST["rooms"]["reserved"]:
         raise SystemExit("that is a referee/reserved room")
-    key, did = _me()
+    key, did = _me(getattr(a, "as_did", None))
     out(_post(key, did, a.room, P.room_msg(a.name), a.send))
 
 
 def cmd_offer(a) -> None:
-    key, did = _me()
+    key, did = _me(getattr(a, "as_did", None))
     ref, _ = (None, None) if a.offline else _reference()
     px = P.amount(a.px)
     if ref and px and not P.within_limits(px, ref):
@@ -170,12 +177,29 @@ def cmd_offer(a) -> None:
 
 
 def _load_obj(src: str) -> dict:
-    text = sys.stdin.read() if src == "-" else (Path(src).read_text() if Path(src).is_file() else src)
-    return json.loads(text)
+    """An offer as JSON text, a file, `-` for stdin, or a bare offer id looked up on the desk."""
+    if src == "-":
+        return json.loads(sys.stdin.read())
+    if Path(src).is_file():
+        return json.loads(Path(src).read_text())
+    if P.TRADE_ID.fullmatch(src):
+        return _desk_offer(src)
+    return json.loads(src)
+
+
+def _desk_offer(tid: str) -> dict:
+    """The newest valid offer with this id in the desk room, posted by its own maker."""
+    view = net.read_room(P.DESK_ROOM, limit=200)
+    for m in reversed(net.signed_json_messages(view)):
+        o = m["json"]
+        if o.get("t") == "offer" and isinstance(o.get("terms"), dict) and o["terms"].get("id") == tid \
+                and m["from"] == o["terms"].get("maker") and P.check_offer(o) is None:
+            return o
+    raise SystemExit(f"no valid offer {tid!r} in the last 200 messages of {P.DESK_ROOM}")
 
 
 def cmd_accept(a) -> None:
-    key, did = _me()
+    key, did = _me(getattr(a, "as_did", None))
     offer = _load_obj(a.offer)
     problem = P.check_offer(offer)
     if problem:
@@ -354,12 +378,14 @@ def main(argv=None) -> int:
     r = sub.add_parser("register", help="post the owner message (mint 10,000 POLF)")
     r.add_argument("--room", default=P.TRADING_ROOM)
     r.add_argument("--send", action="store_true")
+    r.add_argument("--as", dest="as_did", metavar="DID", help="refuse unless the seed belongs to this did:key")
     r.set_defaults(f=cmd_register)
 
     rr = sub.add_parser("register-room", help="register a technocore room as a trading room")
     rr.add_argument("name")
     rr.add_argument("--room", default=P.TRADING_ROOM)
     rr.add_argument("--send", action="store_true")
+    rr.add_argument("--as", dest="as_did", metavar="DID", help="refuse unless the seed belongs to this did:key")
     rr.set_defaults(f=cmd_register_room)
 
     o = sub.add_parser("offer", help="sign terms as maker")
@@ -373,13 +399,15 @@ def main(argv=None) -> int:
     o.add_argument("--post", action="store_true", help="publish the signed offer in --room")
     o.add_argument("--room", default=P.DESK_ROOM, help=f"where offers are published (default {P.DESK_ROOM}, shared with the web app)")
     o.add_argument("--send", action="store_true")
+    o.add_argument("--as", dest="as_did", metavar="DID", help="refuse unless the seed belongs to this did:key")
     o.add_argument("--offline", action="store_true", help="skip the referee limit check")
     o.set_defaults(f=cmd_offer)
 
     ac = sub.add_parser("accept", help="countersign an offer and post the trade")
-    ac.add_argument("offer", help="offer JSON, a file path, or - for stdin")
+    ac.add_argument("offer", help="an offer id from the desk, offer JSON, a file path, or - for stdin")
     ac.add_argument("--room", default=P.TRADING_ROOM)
     ac.add_argument("--send", action="store_true")
+    ac.add_argument("--as", dest="as_did", metavar="DID", help="refuse unless the seed belongs to this did:key")
     ac.add_argument("--offline", action="store_true")
     ac.set_defaults(f=cmd_accept)
 
@@ -422,6 +450,10 @@ def main(argv=None) -> int:
         a.f(a)
     except net.HTTPError as e:
         print(f"error: {e}", file=sys.stderr)
+        return 2
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        reason = getattr(e, "reason", e)
+        print(f"error: cannot reach {net.TC} ({reason}). Check your connection and try again; nothing was posted.", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         return 130
