@@ -1,17 +1,41 @@
 # Close Call — join the Technocore NVDA contest from your browser
 
-**App:** https://sprmn24.github.io/technocore-closecall-agent/
+## ▶ [Open the app: sprmn24.github.io/technocore-closecall-agent](https://sprmn24.github.io/technocore-closecall-agent/)
+
+Nothing to download or install. It runs in your browser on a phone or a computer.
 
 Close Call (`close-1`) is FLOP Labs' free trading contest on [technocore.chat](https://technocore.chat).
 Every player gets 10,000 play-money POLF and trades one NVIDIA future with other players,
 settled against Hyperliquid's `xyz:NVDA`. The three best scores share 1,000,000 FLOP.
+Trading closes on **2026-10-04 at 09:00 UTC**.
 
-This repository gives anyone a way in, including people who have never touched Technocore:
+### How to join, step by step
 
-- **A web app**: one click to get a contest key, one to register, then trade from the browser.
-  It never asks anyone to type or paste a seed. Available in English, Português (Brasil), 日本語,
-  한국어, العربية, Türkçe and Français.
-- **A command-line agent** for automation and power users.
+1. **Open [the app](https://sprmn24.github.io/technocore-closecall-agent/).** It opens in your
+   browser's language; you can switch at the top right.
+2. **Start → Create a new DID.** Your key is made in your browser. Its seed (secret) is shown once:
+   copy it or download the recovery file and keep it somewhere safe. Never share it with anyone.
+   No one needs it to help you, and this site will never ask you for it.
+3. **Register my key.** One click. The referee sends you **10,000 POLF** at the next sweep
+   (within 5 minutes). **My account** shows when it arrives and what you have left.
+4. **Trade.** On **Trade**, pick a waiting offer and press **Buy** or **Sell**, or publish your own
+   price. **My account** shows every trade, the fees and your balance after each one.
+5. **Follow your rank** on **Leaderboard**. Scores are final at the close on 4 October.
+
+Already made a DID with Technocore's tools? Choose **I already have a DID** on **Start** and type
+your public DID. The app then gives you a one-line command to sign each action in your own
+terminal, so your seed never touches the browser.
+
+| | |
+|---|---|
+| Português | [Abra o app](https://sprmn24.github.io/technocore-closecall-agent/) e escolha "Português (Brasil)" no canto superior direito. Nada para instalar. |
+| 日本語 | [アプリを開き](https://sprmn24.github.io/technocore-closecall-agent/)、右上で「日本語」を選んでください。インストール不要です。 |
+| 한국어 | [앱을 열고](https://sprmn24.github.io/technocore-closecall-agent/) 오른쪽 위에서 "한국어"를 선택하세요. 설치할 것이 없습니다. |
+| العربية | [افتح التطبيق](https://sprmn24.github.io/technocore-closecall-agent/) واختر "العربية" أعلى الصفحة. لا حاجة لأي تثبيت. |
+| Français | [Ouvrez l'app](https://sprmn24.github.io/technocore-closecall-agent/) et choisissez « Français » en haut à droite. Rien à installer. |
+| Türkçe | [Uygulamayı aç](https://sprmn24.github.io/technocore-closecall-agent/) ve sağ üstten "Türkçe"yi seç. Kurulum yok. |
+
+This repository also has a **command-line agent** for automation and power users (below).
 
 > **Unofficial community tool.** Not affiliated with FLOP Labs, Technocore, Hyperliquid or
 > trade.xyz. Built on the rules at
