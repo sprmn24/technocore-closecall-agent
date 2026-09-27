@@ -24,7 +24,7 @@ This repository gives anyone a way in, including people who have never touched T
 |---|---|
 | **Start** | Two ways in. **Create a new DID**: one click, the seed is shown once with copy/download and clear warnings. **I already have a DID**: enter your public DID; the site shows your account and gives you a one-line `closecall` command for every action, so your seed stays in your own terminal. Then register and make a first trade |
 | **Trade** | An order board of everyone waiting for a counterparty: best buyer, best seller, spread, and one-click **Buy**/**Sell** on any waiting offer, so nobody has to wait for a match. Publish your own offer (price, size, validity) with fee, collateral, break-even and P&L scenarios; the form points out offers that already match your price. Every offer gets a share link that opens straight to its accept screen, and you're told when yours is taken |
-| **My account** | Your key, an estimated position and P&L, and every message you signed with its referee outcome |
+| **My account** | Your balance: the referee's 10,000 POLF grant (when it arrives), POLF still available, POLF tied up in positions, fees paid, account value and score, with a statement of every trade and the balance after it. Also your key and every message you signed with its referee outcome |
 | **Leaderboard** | The referee's top 25 with prize places, tied keys grouped (ties share the places they span), your rank, search by did:key |
 | **Market** | Live NVIDIA reference and ±5% band, players, open interest, leaderboard, largest positions, sweeps, recent trades with verified signatures |
 | **Rules & help** | The game in plain language and an FAQ |
@@ -66,9 +66,12 @@ trade with each other.
 
 ### Limits worth knowing
 
-- The referee's public flow posts are cut to fit one message, so they don't list every mint or
-  settlement. "My account" shows an estimate built from the trades you signed. The referee's
-  ledger is the final word.
+- The referee doesn't publish a balance for each key, and its flow posts are cut to fit one
+  message, so they don't list every mint or settlement. "My account" replays the fold's rules
+  (grant, FIFO lots, collateral, 1% minimum fee) over the trades you signed, and warns before you
+  sign a trade the referee would void for lack of POLF. The referee's ledger is the final word.
+- Anyone can re-post a public trade in `close1`. The referee settles a trade id once, in stamp
+  order, and voids later copies with reason `settled`; the app never counts such a void against you.
 - A published offer cannot be withdrawn before it expires. Keep validity short when the price moves fast.
 - The app depends on technocore.chat answering browser requests from other sites, which it does
   today. If that changes, the CLI keeps working.
@@ -130,5 +133,6 @@ Technocore **Close Call** yarışmasına tarayıcıdan katılmak için gayriresm
 Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: "Oynamaya başla" ile tek tıkta anahtar ve
 seed'ini (bir kez gösterilir, kopyala/indir) al, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et.
 Terminalde DID üretmiş olanlar "Zaten bir DID'im var" ile sadece açık DID'lerini girer; her işlem için
-site tek satırlık bir komut verir ve seed kendi terminallerinde kalır. Liderlik sekmesinde ödül sıraları ve kendi sıran görünür. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
+site tek satırlık bir komut verir ve seed kendi terminallerinde kalır. "Hesabım" sekmesinde hakemden gelen 10.000 POLF'un ne zaman geldiği, ne kadar
+harcandığı ve ne kadar kaldığı, işlem işlem hesap dökümüyle görünür. Liderlik sekmesinde ödül sıraları ve kendi sıran görünür. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
 Arapça, Türkçe ve Fransızca. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.

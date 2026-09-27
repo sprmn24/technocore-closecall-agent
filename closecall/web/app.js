@@ -348,7 +348,8 @@ async function register(btn) {
   busy(btn, true, t("ui.signing"));
   try {
     const rec = await C.postSigned(S.signer, C.TRADING_ROOM, C.ownerMsg(S.signer.did));
-    journalAdd({ kind: "owner", room: C.TRADING_ROOM, seq: rec.seq, sweep: C.nextSweep() });
+    const at = Date.parse(rec && rec.ts) || Date.now();
+    journalAdd({ kind: "owner", room: C.TRADING_ROOM, seq: rec.seq, at, sweep: C.nextSweep(at) });
     toast(t("reg.done"));
   } catch (e) { toast(t("ui.failed") + ": " + errText(e), true); }
   busy(btn, false); renderAll();
@@ -367,6 +368,16 @@ function bandProblem(pxC) {
   if (!l || !l[0] || !l[1]) return null;
   if (pxC < l[0] || pxC > l[1]) return t("tr.outofband", { lo: C.fromCents(l[0]), hi: C.fromCents(l[1]) });
   return null;
+}
+
+/** Why the referee would void this trade for lack of POLF, going by my account book; else null. */
+function fundsProblem(mySide, qC, pC) {
+  const book = accountBook();
+  if (!book.grant) return null;
+  const side = mySide === "buy" ? 1n : -1n, held = -side * book.pos;
+  const closing = held > 0n ? (held < qC ? held : qC) : 0n;
+  const need = (qC - closing) * pC + qC * pC / 100n;
+  return book.cash < need ? t("bal.funds", { have: fmt(P4(book.cash)), need: fmt(P4(need)) }) : null;
 }
 
 /** Fee, collateral, break-even and P&L scenarios for my side of a trade. */
@@ -405,10 +416,10 @@ async function publishOffer(btn) {
     terms = { id: C.newTradeId(), maker: myDid(), px: C.fromCents(pC), qty: C.fromCents(qC), side: f.side, taker, until: C.nextSweep() + Number(f.ttl) - 1 };
     const p = C.termsProblem(terms); if (p) throw new Error(p);
   } catch (e) { toast(e.message, true); return; }
-  const band = bandProblem(pC);
+  const band = bandProblem(pC), funds = fundsProblem(f.side, qC, pC);
   if (mode === "terminal") {
     const cmd = `closecall offer ${f.side} ${terms.qty} ${terms.px} --ttl ${Number(f.ttl)}${taker !== "any" ? " --taker " + taker : ""} --post --send --as ${S.watchDid}`;
-    await terminalModal(t("tr.confirmoffer"), t("dm.offerdesc"), cmd);
+    await terminalModal(t("tr.confirmoffer"), t("dm.offerdesc") + (funds ? " " + funds : ""), cmd);
     return;
   }
   const ok = await modal((close) => [
@@ -418,6 +429,7 @@ async function publishOffer(btn) {
       el("div", {}, el("span", {}, t("tr.validuntil")), el("span", {}, utc(C.sweepTime(terms.until)) + " · " + t("tr.sweep") + " " + terms.until)),
       el("div", {}, el("span", {}, t("tr.counterparty")), el("span", {}, taker === "any" ? t("tr.anyone") : didEl(taker)))),
     band && el("div", { class: "callout bad" }, band),
+    funds && el("div", { class: "callout bad" }, funds),
     el("div", { class: "callout info" }, t("tr.offernote")),
     el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")),
       el("button", { class: "btn primary", type: "button", onclick: () => close(true) }, t("tr.signpublish"))),
@@ -441,11 +453,12 @@ async function acceptOffer(o) {
   const terms = o.terms, mySide = terms.side === "buy" ? "sell" : "buy";
   if (C.nextSweep() > terms.until) { toast(t("tr.expired"), true); return; }
   if (mode === "terminal") {
-    await terminalModal(t("tr.confirmaccept"), t("tr.acceptdesc", { qty: terms.qty, px: terms.px }) + " " + t("dm.acceptdesc"), `closecall accept ${terms.id} --send --as ${S.watchDid}`);
+    const funds = fundsProblem(mySide, C.cents(terms.qty), C.cents(terms.px));
+    await terminalModal(t("tr.confirmaccept"), t("tr.acceptdesc", { qty: terms.qty, px: terms.px }) + " " + t("dm.acceptdesc") + (funds ? " " + funds : ""), `closecall accept ${terms.id} --send --as ${S.watchDid}`);
     return;
   }
   const qC = C.cents(terms.qty), pC = C.cents(terms.px);
-  const band = bandProblem(pC);
+  const band = bandProblem(pC), funds = fundsProblem(mySide, qC, pC);
   const ok = await modal((close) => [
     el("h2", {}, t("tr.confirmaccept")),
     el("p", { class: "muted" }, t("tr.acceptdesc", { qty: terms.qty, px: terms.px })),
@@ -453,6 +466,7 @@ async function acceptOffer(o) {
     el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("tr.maker")), didEl(terms.maker)),
       el("div", {}, el("span", {}, t("tr.settlesby")), el("span", {}, utc(C.sweepTime(terms.until))))),
     band && el("div", { class: "callout bad" }, band),
+    funds && el("div", { class: "callout bad" }, funds),
     el("div", { class: "callout warn" }, t("tr.acceptwarn")),
     el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")),
       el("button", { class: "btn primary", type: "button", onclick: () => close(true) }, t("tr.signaccept"))),
@@ -464,7 +478,8 @@ async function acceptOffer(o) {
     const problem = await C.checkTrade(JSON.parse(msg));
     if (problem) throw new Error(problem);
     const rec = await C.postSigned(S.signer, C.TRADING_ROOM, msg);
-    journalAdd({ kind: "trade", id: terms.id, room: C.TRADING_ROOM, seq: rec.seq, terms, taker: S.signer.did, role: "taker", sweep: C.nextSweep() });
+    const at = Date.parse(rec && rec.ts) || Date.now();
+    journalAdd({ kind: "trade", id: terms.id, room: C.TRADING_ROOM, seq: rec.seq, at, terms, taker: S.signer.did, role: "taker", sweep: C.nextSweep(at) });
     C.postSigned(S.signer, C.DESK_ROOM, msg).catch(() => {}); // let the maker see the fill; best effort
     S.desk.filled.add(terms.id);
     toast(t("tr.accepted"));
@@ -484,6 +499,7 @@ async function loadTicker() {
   if (h.status === "fulfilled") S.hl = h.value;
   S.live = S.price ? C.sweepNow() - (S.price.n ?? -99) <= 2 : false;
   renderBanner(); renderTicker();
+  if (S.view === "account") renderAccount();
 }
 
 async function loadDesk() {
@@ -496,8 +512,8 @@ async function loadDesk() {
       if (o.t === "trade" && o.terms && typeof o.terms.id === "string") {
         if ((await C.checkTrade(o)) === null) {
           filled.add(o.terms.id);
-          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, taker: o.taker, role: "maker" });
-          if (myDid() && o.taker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, terms: o.terms, taker: o.taker, role: "taker" });
+          if (myDid() && o.terms.maker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, terms: o.terms, taker: o.taker, role: "maker" });
+          if (myDid() && o.taker === myDid()) journalAdd({ kind: "trade", id: o.terms.id, room: C.DESK_ROOM, seq: m.seq, at: Date.parse(m.ts) || undefined, terms: o.terms, taker: o.taker, role: "taker" });
         }
       } else if (o.t === "offer") {
         if (m.from !== o.terms?.maker) continue; // posted by someone else than the maker: ignore
@@ -521,7 +537,7 @@ async function loadDesk() {
     S.desk.error = e.status === 404 ? null : errText(e);
     if (e.status === 404) S.desk = { offers: [], filled: S.desk.filled, at: Date.now(), error: null };
   }
-  renderTrade(); renderStart();
+  renderTrade(); renderStart(); renderWallet();
   if (S.pendingOffer) {
     const id = S.pendingOffer; S.pendingOffer = null;
     history.replaceState(null, "", "#trade");
@@ -537,9 +553,17 @@ async function loadFlow(limit = 50) {
     for (const m of C.signedJson(view)) {
       if (m.json.t !== "flow" || (referee && m.from !== referee)) continue;
       for (const e of m.json.settled || []) { const id = Array.isArray(e) ? e[0] : typeof e === "string" ? e : e && e.id; if (id) S.flowIndex.set(id, { outcome: "settled", n: m.json.n }); }
-      for (const e of m.json.void || []) { if (Array.isArray(e) && typeof e[0] === "string") S.flowIndex.set(e[0], { outcome: "void", reason: String(e[1] ?? ""), n: m.json.n }); }
+      for (const e of m.json.void || []) {
+        if (!Array.isArray(e) || typeof e[0] !== "string") continue;
+        const reason = String(e[1] ?? ""), had = S.flowIndex.get(e[0]);
+        // "settled" voids a later copy of an id that already settled (anyone may re-post a public
+        // trade): the id itself settled, so it must not overwrite that.
+        if (reason === "settled") { if (!had) S.flowIndex.set(e[0], { outcome: "settled", n: m.json.n, copies: true }); continue; }
+        if (!had || had.outcome !== "settled") S.flowIndex.set(e[0], { outcome: "void", reason, n: m.json.n });
+      }
     }
   } catch { /* shown as pending */ }
+  renderWallet();
 }
 
 async function loadLeaders() {
@@ -619,8 +643,12 @@ function renderTicker() {
 }
 function renderWallet() {
   const w = clear($("wallet-chip"));
-  if (S.signer) w.append(el("span", { class: "dot good" }), didEl(S.signer.did));
-  else if (S.watchDid) w.append(el("span", { class: "dot good" }), didEl(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"));
+  const bal = () => {
+    const b = registered() ? accountBook() : null;
+    return b ? el("a", { class: "chip-bal num", href: "#account", title: t("bal.chip") + " · " + myDid() }, fmt(P4(b.cash)) + " POLF") : null;
+  };
+  if (S.signer) w.append(el("span", { class: "dot good" }), didEl(S.signer.did), bal() || "");
+  else if (S.watchDid) w.append(el("span", { class: "dot good" }), didEl(S.watchDid), el("span", { class: "term-badge", title: t("dm.chip"), "aria-label": t("dm.chip") }, "›_"), bal() || "");
   else if (S.vault) w.append(el("span", { class: "dot warn" }), t("wl.locked"));
   else w.append(el("span", { class: "dot" }), t("wl.none"));
 }
@@ -694,7 +722,7 @@ function renderOfferForm() {
   const box = clear($("offer-form"));
   const f = S.form, r = refC();
   if (!f.px && r) f.px = C.fromCents(r);
-  const cash = estimateLedger().freeC;
+  const book = accountBook(), cash = book.grant ? book.freeC : C.MINT_CENTS;
   const pC = C.cents(f.px) || r || 0n;
   const maxQ = pC ? C.maxQtyC(cash, pC) : 0n;
 
@@ -829,44 +857,151 @@ async function shareModal(terms) {
 function renderTrade() { if (S.view !== "trade") return; renderOfferForm(); renderBoard(); }
 
 // ---- rendering: account ------------------------------------------------------------------
-/** Replays my known trades with the fold's lot rules: an estimate, never the referee's word. */
-function estimateLedger() {
-  let cash = C.MINT_CENTS * 100n; // 1e-4 POLF units
-  const lots = []; // [qtyC signed, pxC]
-  let fees = 0n, count = 0;
-  const trades = journal().filter((e) => e.kind === "trade" && e.terms);
-  const seen = new Set();
-  for (const e of trades) {
-    if (seen.has(e.id)) continue; seen.add(e.id);
-    const f = S.flowIndex.get(e.id);
-    if (f && f.outcome === "void") continue;
-    const mySide = e.role === "maker" ? e.terms.side : e.terms.side === "buy" ? "sell" : "buy";
-    const side = mySide === "buy" ? 1n : -1n, qC = C.cents(e.terms.qty), pC = C.cents(e.terms.px);
-    if (!qC || !pC) continue;
-    const fee = qC * pC / 100n; fees += fee; cash -= fee; count++;
-    let left = qC;
-    while (left > 0n && lots.length && lots[0][0] * side < 0n) {
-      const [lq, lp] = lots[0], size = left < (lq < 0n ? -lq : lq) ? left : (lq < 0n ? -lq : lq);
-      cash += side < 0n ? size * pC : size * (2n * lp - pC);
-      left -= size;
-      if (size === (lq < 0n ? -lq : lq)) lots.shift(); else lots[0][0] = lq + side * size;
-    }
-    if (left > 0n) { cash -= left * pC; lots.push([side * left, pC]); }
-  }
-  const pos = lots.reduce((a, [q]) => a + q, 0n);
-  const r = refC();
-  const value = r ? cash + lots.reduce((a, [q, p]) => a + (q > 0n ? q * r : -q * (2n * p - r)), 0n) : null;
-  const freeC = cash / 100n > 0n ? cash / 100n : 0n;
-  const avg = lots.length ? lots.reduce((a, [q, p]) => a + (q < 0n ? -q : q) * p, 0n) / (pos < 0n ? -pos : pos || 1n) : null;
-  return { freeC, pos, avg, fees, count, pnl: value != null ? value - C.MINT_CENTS * 100n : null };
+const P4 = (v) => Number(v) / 1e4; // 1e-4 POLF units -> POLF
+const polf = (v, signed) => (signed && v > 0n ? "+" : "") + fmt(P4(v));
+const lastSweepDone = () => (S.price && Number.isInteger(S.price.n) ? S.price.n : C.sweepNow());
+/** The sweep that picks up a message stamped at `ms`. */
+const entrySweep = (e) => e.sweep ?? C.nextSweep(e.at ?? e.ts);
+
+/** When the referee's 10,000 POLF arrives, from this browser's registration entry. */
+function grantInfo() {
+  const e = journal().find((x) => x.kind === "owner");
+  if (!e) return null;
+  const sweep = e.room === "elsewhere" && e.sweep == null ? null : entrySweep(e);
+  return { sweep, at: e.at ?? e.ts, done: sweep == null || lastSweepDone() >= sweep };
 }
 
+/**
+ * My account replayed with the fold's rules (tests/close_call_fold.py): the grant, then my trades in
+ * sweep order, FIFO lots, collateral = price per opened contract, 1% fee per side. Amounts are
+ * BigInt in 1e-4 POLF. An estimate: the referee publishes no per-key balances.
+ */
+function accountBook() {
+  const MINT = C.MINT_CENTS * 100n, g = grantInfo(), done = lastSweepDone();
+  const items = [{ kind: "mint", sweep: g ? g.sweep ?? -1 : -1, at: g ? g.at : 0, status: !g ? "none" : g.done ? "received" : "coming" }];
+  const seen = new Set();
+  for (const e of journal()) {
+    if (e.kind !== "trade" || !e.terms || seen.has(e.id)) continue;
+    seen.add(e.id);
+    items.push({ kind: "trade", e, sweep: entrySweep(e), at: e.at ?? e.ts });
+  }
+  items.sort((a, b) => a.sweep - b.sweep || (a.kind === "mint" ? -1 : b.kind === "mint" ? 1 : a.at - b.at));
+  let cash = 0n, fees = 0n, count = 0;
+  const lots = [], rows = []; // lots: [qtyC signed, pxC]
+  for (const it of items) {
+    if (it.kind === "mint") {
+      const delta = it.status === "none" ? 0n : MINT;
+      cash += delta;
+      rows.push({ ...it, delta, fee: 0n, after: cash });
+      continue;
+    }
+    const e = it.e, mySide = e.role === "maker" ? e.terms.side : e.terms.side === "buy" ? "sell" : "buy";
+    const qC = C.cents(e.terms.qty), pC = C.cents(e.terms.px);
+    if (!qC || !pC) continue;
+    const f = S.flowIndex.get(e.id);
+    let status = f ? f.outcome : it.sweep > done ? "pending" : "assumed", reason = f ? f.reason : null;
+    if (status !== "void" && (!g || (g.sweep != null && it.sweep < g.sweep))) { status = "void"; reason = "not_owner"; }
+    const row = { kind: "trade", at: it.at, sweep: it.sweep, id: e.id, side: mySide, qty: e.terms.qty, px: e.terms.px, status, reason, n: f && f.n, delta: 0n, fee: 0n };
+    if (status !== "void") {
+      const before = cash, fee = qC * pC / 100n;
+      if (e.terms.maker === e.taker) { cash -= 2n * fee; fees += 2n * fee; row.fee = 2n * fee; }
+      else {
+        const side = mySide === "buy" ? 1n : -1n;
+        cash -= fee; fees += fee; row.fee = fee;
+        let left = qC;
+        while (left > 0n && lots.length && lots[0][0] * side < 0n) {
+          const [lq, lp] = lots[0], held = lq < 0n ? -lq : lq, size = left < held ? left : held;
+          cash += side < 0n ? size * pC : size * (2n * lp - pC);
+          left -= size;
+          if (size === held) lots.shift(); else lots[0][0] = lq + side * size;
+        }
+        if (left > 0n) { cash -= left * pC; lots.push([side * left, pC]); }
+      }
+      row.delta = cash - before; count++;
+    }
+    row.after = cash;
+    rows.push(row);
+  }
+  const abs = (x) => (x < 0n ? -x : x);
+  const pos = lots.reduce((a, [q]) => a + q, 0n);
+  const locked = lots.reduce((a, [q, p]) => a + abs(q) * p, 0n);
+  const r = refC();
+  const value = r ? cash + lots.reduce((a, [q, p]) => a + (q > 0n ? q * r : -q * (2n * p - r)), 0n) : null;
+  const granted = g ? MINT : 0n;
+  const realized = cash + locked + fees - granted;
+  const avg = lots.length ? lots.reduce((a, [q, p]) => a + abs(q) * p, 0n) / (abs(pos) || 1n) : null;
+  return {
+    grant: g, rows, cash, locked, fees, count, pos, avg, value, realized,
+    unrealized: value != null ? value - cash - locked : null,
+    score: value != null && g ? value - MINT : null,
+    freeC: cash > 0n ? cash / 100n : 0n,
+    pnl: value != null && g ? value - MINT : null,
+  };
+}
 function tradeStatus(e) {
   const f = S.flowIndex.get(e.id);
   if (f && f.outcome === "settled") return el("span", { class: "badge ok" }, t("st.settled") + " · #" + f.n);
   if (f && f.outcome === "void") return el("span", { class: "badge bad", title: f.reason }, t("st.void") + ": " + rsn(f.reason));
   if (e.terms && C.sweepNow() > e.terms.until) return el("span", { class: "badge neutral", title: t("st.unlistedtip") }, t("st.unlisted"));
   return el("span", { class: "badge warn" }, t("st.pending"));
+}
+
+function balanceStatus(r) {
+  if (r.kind === "mint") {
+    if (r.status === "received") return el("span", { class: "badge ok" }, t("bal.st.received"));
+    if (r.status === "coming") return el("span", { class: "badge warn" }, t("bal.st.coming"));
+    return el("span", { class: "badge neutral" }, t("bal.st.none"));
+  }
+  if (r.status === "settled") return el("span", { class: "badge ok" }, t("st.settled") + (r.n != null ? " · #" + r.n : ""));
+  if (r.status === "void") return el("span", { class: "badge bad", title: r.reason || "" }, t("st.void") + ": " + rsn(r.reason));
+  if (r.status === "assumed") return el("span", { class: "badge neutral", title: t("bal.st.assumedtip") }, t("bal.st.assumed"));
+  return el("span", { class: "badge warn" }, t("st.pending"));
+}
+
+function renderBalance(B) {
+  const box = clear($("acct-balance"));
+  box.append(el("h2", {}, t("bal.title")), el("p", { class: "muted" }, t("bal.desc")));
+  const g = B.grant;
+  if (!g) {
+    box.append(el("div", { class: "callout info" }, t("bal.grantnone"), " ", el("a", { href: "#start" }, t("nav.start"))));
+    return;
+  }
+  const when = g.sweep != null ? utc(C.sweepTime(g.sweep)) : "";
+  box.append(el("div", { class: "callout " + (g.done ? "good" : "warn") + " bal-grant" },
+    g.sweep == null ? t("bal.grantmarked")
+      : g.done ? t("bal.grantdone", { n: g.sweep, time: when })
+        : t("bal.grantpending", { n: g.sweep, time: when, left: dur(C.sweepTime(g.sweep) - Date.now()) })));
+  const pos = Number(B.pos) / 100, r = refC();
+  const sgn = (v) => (v == null ? "" : v > 0n ? " buy-t" : v < 0n ? " sell-t" : "");
+  const tileC = (label, value, foot, cls, id) => el("div", { class: "card tile" + (id ? " " + id : "") }, el("div", { class: "label" }, label),
+    el("div", { class: "value num" + (cls || "") }, value), el("div", { class: "foot num" }, foot || ""));
+  box.append(el("div", { class: "tiles bal-tiles" },
+    tileC(t("bal.available"), fmt(P4(B.cash)), t("bal.availablefoot"), "", "bal-main"),
+    tileC(t("bal.locked"), fmt(P4(B.locked)), pos ? t("bal.contracts", { q: fmt(Math.abs(pos)) }) + " · " + (pos > 0 ? t("ec.long") : t("ec.short")) : t("bal.flat")),
+    tileC(t("bal.fees"), fmt(P4(B.fees)), t("bal.feesfoot", { n: B.count })),
+    tileC(t("bal.total"), B.value != null ? fmt(P4(B.value)) : "–", r ? t("bal.valuefoot", { px: C.fromCents(r) }) : ""),
+    tileC(t("bal.score"), B.score != null ? polf(B.score, true) : "–",
+      B.unrealized != null ? t("bal.scorefoot", { r: polf(B.realized - B.fees, true), u: polf(B.unrealized, true) }) : "", sgn(B.score))));
+  const tb = el("table", { id: "t-statement" });
+  tb.append(el("thead", {}, el("tr", {}, [t("ac.time"), t("tr.sweep"), t("bal.col.item"), t("bal.col.fee"), t("bal.col.change"), t("bal.col.after"), t("tr.status")]
+    .map((h, i) => el("th", { class: i >= 3 && i <= 5 ? "r" : null }, h)))));
+  const body = el("tbody");
+  for (const row of B.rows.slice().reverse()) {
+    const item = row.kind === "mint" ? t("bal.row.mint")
+      : el("span", { class: row.side + "-t" }, t(row.side === "buy" ? "bal.row.buy" : "bal.row.sell", { qty: row.qty, px: row.px }));
+    const off = row.status === "void" || row.status === "none";
+    body.append(el("tr", { class: off ? "off" : null },
+      el("td", { class: "num" }, row.at ? utcFull(row.at) : "–"),
+      el("td", { class: "num" }, row.sweep >= 0 ? "#" + row.sweep : "–"),
+      el("td", {}, item),
+      el("td", { class: "r num", title: row.fee ? t("bal.feetip") : "" }, row.fee ? fmt(P4(row.fee)) : "–"),
+      el("td", { class: "r num" + sgn(row.delta) }, row.delta ? polf(row.delta, true) : "0"),
+      el("td", { class: "r num" }, fmt(P4(row.after))),
+      el("td", {}, balanceStatus(row))));
+  }
+  tb.append(body);
+  box.append(el("h3", {}, t("bal.statement")), el("p", { class: "hint" }, t("bal.statementdesc")), el("div", { class: "scroll" }, tb),
+    el("p", { class: "hint" }, t("bal.note")));
 }
 
 function renderAccount() {
@@ -884,16 +1019,15 @@ function renderAccount() {
         S.watchDid && !S.signer ? el("button", { class: "btn small ghost", type: "button", onclick: () => { setWatch(null); renderAll(); } }, t("dm.other"))
           : el("button", { class: "btn small danger ghost", type: "button", onclick: forgetKey }, t("key.forget"))));
   }
-  const L = estimateLedger();
+  const L = accountBook();
+  renderBalance(L);
   const pos = Number(L.pos) / 100;
   s.append(el("h2", {}, t("ac.summary")), el("p", { class: "muted" }, t("ac.estimate")),
     el("div", { class: "kvlist" },
       el("div", {}, el("span", {}, t("ac.registered")), el("span", {}, registered() ? "✓" : "—")),
       el("div", {}, el("span", {}, t("ac.position")), el("span", { class: "num " + (pos > 0 ? "buy-t" : pos < 0 ? "sell-t" : "") }, fmt(pos) + (pos ? " (" + (pos > 0 ? t("ec.long") : t("ec.short")) + ")" : ""))),
       el("div", {}, el("span", {}, t("ac.avg")), el("span", { class: "num" }, L.avg != null ? "$" + C.fromCents(L.avg) : "–")),
-      el("div", {}, el("span", {}, t("ac.pnl")), el("span", { class: "num " + (L.pnl > 0n ? "buy-t" : L.pnl < 0n ? "sell-t" : "") }, L.pnl != null ? fmt(Number(L.pnl) / 1e4) + " POLF" : "–")),
-      el("div", {}, el("span", {}, t("ac.fees")), el("span", { class: "num" }, fmt(Number(L.fees) / 1e4) + " POLF")),
-      el("div", {}, el("span", {}, t("ac.free")), el("span", { class: "num" }, C.fromCents(L.freeC) + " POLF"))));
+      el("div", {}, el("span", {}, t("ac.pnl")), el("span", { class: "num " + (L.pnl > 0n ? "buy-t" : L.pnl < 0n ? "sell-t" : "") }, L.pnl != null ? polf(L.pnl, true) + " POLF" : "–"))));
 
   const rows = journal().slice().reverse();
   const tb = clear($("t-activity"));
@@ -903,7 +1037,8 @@ function renderAccount() {
   for (const e of rows) {
     const mySide = e.terms ? (e.role === "maker" ? e.terms.side : e.terms.side === "buy" ? "sell" : "buy") : null;
     const what = e.kind === "owner" ? t("ac.k.owner") : e.kind === "offer" ? t("ac.k.offer") : e.role === "maker" ? t("ac.k.filled") : t("ac.k.accepted");
-    const status = e.kind === "trade" ? tradeStatus(e) : e.kind === "offer" ? (S.desk.filled.has(e.id) ? el("span", { class: "badge ok" }, t("st.filled")) : C.nextSweep() > e.terms.until ? el("span", { class: "badge neutral" }, t("st.expired")) : el("span", { class: "badge warn" }, t("st.open"))) : el("span", { class: "badge ok" }, t("st.posted"));
+    const booked = e.kind === "trade" ? L.rows.find((r) => r.kind === "trade" && r.id === e.id) : null;
+    const status = e.kind === "trade" ? (booked ? balanceStatus(booked) : tradeStatus(e)) : e.kind === "offer" ? (S.desk.filled.has(e.id) ? el("span", { class: "badge ok" }, t("st.filled")) : C.nextSweep() > e.terms.until ? el("span", { class: "badge neutral" }, t("st.expired")) : el("span", { class: "badge warn" }, t("st.open"))) : el("span", { class: "badge ok" }, t("st.posted"));
     body.append(el("tr", {}, el("td", { class: "num" }, utcFull(e.ts)), el("td", {}, what),
       el("td", {}, mySide ? el("span", { class: mySide + "-t" }, mySide === "buy" ? t("tr.buy") : t("tr.sell")) : "–"),
       el("td", { class: "r num" }, e.terms ? e.terms.qty : "–"), el("td", { class: "r num" }, e.terms ? e.terms.px : "–"), el("td", {}, status)));
