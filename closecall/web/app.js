@@ -1,6 +1,6 @@
 // Close Call web app. Every string that comes from the network is rendered with textContent.
 import * as C from "./core.js";
-import { STRINGS } from "./i18n.js";
+import { STRINGS, HTML_LANG, RTL } from "./i18n.js";
 
 // ---- state -------------------------------------------------------------------------------
 const S = {
@@ -27,8 +27,8 @@ function t(key, vars) {
 }
 const rsn = (k) => (STRINGS.en["reason." + k] ? t("reason." + k) : String(k));
 function applyStatic() {
-  document.documentElement.lang = S.lang;
-  document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr";
+  document.documentElement.lang = HTML_LANG[S.lang] || S.lang;
+  document.documentElement.dir = RTL.has(S.lang) ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
   document.querySelectorAll("[data-i18n-title]").forEach((n) => { n.title = t(n.dataset.i18nTitle); });
   document.title = t("doc.title");
@@ -138,86 +138,112 @@ async function activate(seed, password) {
   seed.fill(0);
 }
 
-function backupText(seedHex, did) {
+function recoveryText(seedHex, did) {
   return [
-    "Close Call / Technocore key backup",
-    "KEEP THIS SECRET. Anyone with the seed controls this key.",
+    "Close Call recovery file",
+    "KEEP THIS FILE PRIVATE. Anyone who has it controls this contest account.",
+    "No one from the contest will ever ask for it. Never paste its contents into a website.",
     "",
-    `did:     ${did}`,
-    `seed:    ${seedHex}`,
+    "Restore: open Close Call, choose \"Restore from recovery file\" and pick this file.",
     "",
-    "Restore: open the Close Call site, choose 'I already have a key' and paste the seed.",
-    "CLI:     SIGN_SEED=<seed> closecall did",
+    `did:  ${did}`,
+    `seed: ${seedHex}`,
+    "",
+    "Command-line tool (optional): SIGN_SEED=<seed> closecall did",
     `Created: ${new Date().toISOString()}`,
   ].join("\n");
 }
+const recoveryName = (did) => `close-call-recovery-${did.slice(-8)}.txt`;
+
+/** The seed in a recovery file this site wrote: its "seed:" line, checked against its "did:" line. */
+async function seedFromRecovery(text) {
+  const m = /^seed:\s*([0-9a-fA-F]{64})\s*$/m.exec(text);
+  if (!m) throw new Error(t("key.badfile"));
+  const seed = C.hexToBytes(m[1]);
+  const signer = await C.signerFromSeed(seed);
+  const d = /^did:\s*(did:key:\S+)\s*$/m.exec(text);
+  if (d && d[1] !== signer.did) { seed.fill(0); throw new Error(t("key.badfile")); }
+  return { seed, did: signer.did };
+}
 
 async function createKeyFlow() {
+  // Stage 1: a password. Stage 2: the recovery file. The seed is never typed or pasted.
   const seed = C.newSeed();
   const signer = await C.signerFromSeed(seed);
   const seedHex = C.bytesToHex(seed);
   const ok = await modal((close) => {
+    const box = el("div", { class: "modal-in-flow" });
     const pw = passwordFields(true);
     const err = el("p", { class: "hint bad" });
-    const saved = el("input", { type: "checkbox" });
-    const finish = el("button", { class: "btn primary", type: "button", disabled: true }, t("key.finish"));
-    saved.addEventListener("change", () => { finish.disabled = !saved.checked; });
-    finish.addEventListener("click", async () => {
-      const problem = pw.check(); if (problem) { err.textContent = problem; return; }
-      busy(finish, true, t("key.securing"));
-      try { await activate(seed, pw.p1.value); close(true); } catch (e) { err.textContent = errText(e); busy(finish, false); }
-    });
-    return [
+    const next = el("button", { class: "btn primary", type: "button" }, t("key.makekey"));
+    const stage2 = () => {
+      const saved = el("input", { type: "checkbox" });
+      const finish = el("button", { class: "btn primary", type: "button", disabled: true }, t("key.finish"));
+      saved.addEventListener("change", () => { finish.disabled = !saved.checked; });
+      const dl = el("button", { class: "btn primary big wide", type: "button" }, "⭳ " + t("key.download"));
+      dl.addEventListener("click", () => { download(recoveryName(signer.did), recoveryText(seedHex, signer.did)); saved.checked = true; finish.disabled = false; });
+      finish.addEventListener("click", async () => {
+        busy(finish, true, t("key.securing"));
+        try { await activate(seed, pw.p1.value); close(true); } catch (e) { err.textContent = errText(e); busy(finish, false); }
+      });
+      clear(box).append(
+        el("h2", {}, t("key.savetitle")),
+        el("p", { class: "muted" }, t("key.savedesc")),
+        el("div", { class: "kvlist" }, el("div", {}, el("span", {}, t("key.yourdid")), el("span", { class: "mono" }, signer.did))),
+        dl,
+        el("div", { class: "callout warn" }, t("key.seedwarn")),
+        el("label", { class: "check" }, saved, el("span", {}, t("key.saved"))),
+        el("details", {}, el("summary", { class: "hint" }, t("key.advanced")),
+          el("p", { class: "hint" }, t("key.yourseed")), el("div", { class: "secret" }, seedHex),
+          el("button", { class: "btn small", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed"))),
+        err,
+        el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), finish),
+      );
+      dl.focus();
+    };
+    next.addEventListener("click", () => { const p = pw.check(); if (p) { err.textContent = p; return; } err.textContent = ""; stage2(); });
+    box.append(
       el("h2", {}, t("key.newtitle")),
       el("p", { class: "muted" }, t("key.newdesc")),
-      el("div", { class: "label" }, t("key.yourdid")), el("div", { class: "mono" }, signer.did),
-      el("div", { class: "label" }, t("key.yourseed")), el("div", { class: "secret" }, seedHex),
-      el("div", { class: "callout warn" }, t("key.seedwarn")),
-      el("div", { class: "row" },
-        el("button", { class: "btn", type: "button", onclick: () => download(`closecall-key-${signer.did.slice(-8)}.txt`, backupText(seedHex, signer.did)) }, "⭳ " + t("key.download")),
-        el("button", { class: "btn", type: "button", onclick: () => copy(seedHex) }, t("key.copyseed"))),
-      ...pw.nodes,
-      el("label", { class: "check" }, saved, el("span", {}, t("key.saved"))),
-      err,
-      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), finish),
-    ];
+      ...pw.nodes, err,
+      el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), next),
+    );
+    return box;
   });
   if (!ok) seed.fill(0);
   if (ok) { toast(t("key.ready")); renderAll(); }
 }
 
-async function importKeyFlow() {
+async function restoreFlow() {
   const ok = await modal((close) => {
-    const ta = el("textarea", { class: "input mono", autocomplete: "off", spellcheck: "false", placeholder: t("key.seedph") });
+    // The native file button is labelled in the browser's language, not the page's: hide it behind our own.
+    const file = el("input", { class: "sr", type: "file", accept: ".txt,text/plain", id: "recovery-file" });
+    const fname = el("span", { class: "hint" }, t("key.nofilechosen"));
+    const picker = el("div", { class: "row" }, el("label", { class: "btn", for: "recovery-file" }, t("key.pickfile")), fname);
     const preview = el("div", { class: "hint" });
     const pw = passwordFields(true);
     const err = el("p", { class: "hint bad" });
-    let timer;
-    ta.addEventListener("input", () => {
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        const v = ta.value.trim();
-        if (!v) { preview.textContent = ""; return; }
-        try {
-          const s = await C.seedFromInput(v), sg = await C.signerFromSeed(s); s.fill(0);
-          preview.textContent = t("key.willbe") + " " + sg.did;
-          if (!/^[0-9a-fA-F]{64}$/.test(v)) preview.textContent += " — " + t("key.passphrase");
-        } catch (e) { preview.textContent = errText(e); }
-      }, 250);
+    let found = null;
+    file.addEventListener("change", async () => {
+      found = null; preview.textContent = ""; err.textContent = "";
+      const f = file.files && file.files[0];
+      fname.textContent = f ? f.name : t("key.nofilechosen");
+      if (!f) return;
+      if (f.size > 20_000) { err.textContent = t("key.badfile"); return; }
+      try { found = await seedFromRecovery(await f.text()); preview.textContent = t("key.willbe") + " " + found.did; }
+      catch (e) { err.textContent = e.message; }
     });
-    const go = el("button", { class: "btn primary", type: "button" }, t("key.import"));
+    const go = el("button", { class: "btn primary", type: "button" }, t("key.restore"));
     go.addEventListener("click", async () => {
-      const problem = pw.check(); if (problem) { err.textContent = problem; return; }
-      if (!ta.value.trim()) { err.textContent = t("key.noseed"); return; }
+      if (!found) { err.textContent = t("key.nofile"); return; }
+      const p = pw.check(); if (p) { err.textContent = p; return; }
       busy(go, true, t("key.securing"));
-      try { const seed = await C.seedFromInput(ta.value); ta.value = ""; await activate(seed, pw.p1.value); close(true); }
-      catch (e) { err.textContent = errText(e); busy(go, false); }
+      try { await activate(found.seed, pw.p1.value); close(true); } catch (e) { err.textContent = errText(e); busy(go, false); }
     });
     return [
-      el("h2", {}, t("key.importtitle")),
-      el("p", { class: "muted" }, t("key.importdesc")),
-      el("div", { class: "field" }, el("label", {}, t("key.seed")), ta, preview),
-      el("div", { class: "callout info" }, t("key.importnote")),
+      el("h2", {}, t("key.restoretitle")),
+      el("p", { class: "muted" }, t("key.restoredesc")),
+      el("div", { class: "field" }, el("span", { class: "label" }, t("key.choosefile")), file, picker, preview),
       ...pw.nodes, err,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close(false) }, t("ui.cancel")), go),
     ];
@@ -241,17 +267,18 @@ async function revealBackup() {
   await modal((close) => {
     const pw = el("input", { class: "input", type: "password", autocomplete: "current-password" });
     const out = el("div"), err = el("p", { class: "hint bad" });
-    const go = el("button", { class: "btn primary", type: "button" }, t("key.show"));
+    const go = el("button", { class: "btn primary", type: "button" }, "⭳ " + t("key.download"));
     go.addEventListener("click", async () => {
       try {
         const seed = await C.openSeed(S.vault, pw.value), hex = C.bytesToHex(seed); seed.fill(0);
-        clear(out).append(el("div", { class: "secret" }, hex),
-          el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => download(`closecall-key-${S.vault.did.slice(-8)}.txt`, backupText(hex, S.vault.did)) }, "⭳ " + t("key.download")),
-            el("button", { class: "btn", type: "button", onclick: () => copy(hex) }, t("key.copyseed"))));
+        download(recoveryName(S.vault.did), recoveryText(hex, S.vault.did));
+        clear(out).append(el("div", { class: "callout good" }, t("key.downloaded")),
+          el("details", {}, el("summary", { class: "hint" }, t("key.advanced")), el("p", { class: "hint" }, t("key.yourseed")),
+            el("div", { class: "secret" }, hex), el("button", { class: "btn small", type: "button", onclick: () => copy(hex) }, t("key.copyseed"))));
         go.remove();
       } catch { err.textContent = t("key.wrongpw"); }
     });
-    return [el("h2", {}, t("key.backuptitle")), el("div", { class: "callout warn" }, t("key.seedwarn")),
+    return [el("h2", {}, t("key.backuptitle")), el("p", { class: "muted" }, t("key.savedesc")), el("div", { class: "callout warn" }, t("key.seedwarn")),
       el("div", { class: "field" }, el("label", {}, t("key.pw")), pw), err, out,
       el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")), go)];
   });
@@ -493,7 +520,7 @@ function renderTicker() {
   const ref = S.price && S.price.ref;
   const now = Date.now(), next = C.sweepTime(C.nextSweep(now));
   tk.append(
-    el("span", {}, el("span", { class: "dot " + (S.live ? "good" : S.live === false ? "bad" : "") }), " ", S.live ? t("tk.live") : t("tk.checking")),
+    el("span", {}, el("span", { class: "dot " + (S.live ? "good" : S.live === false ? "bad" : "") }), " ", S.live ? t("tk.live") : S.live === false ? t("tk.late") : t("tk.checking")),
     el("span", {}, "NVDA ", el("b", { class: "num" }, S.hl ? "$" + fmt(S.hl.px) : "–")),
     el("span", {}, t("tk.ref") + " ", el("b", { class: "num" }, ref ? fmt(ref.px) : "–"), S.price && S.price.limits ? el("span", { class: "num ltr" }, ` [${S.price.limits[0]} – ${S.price.limits[1]}]`) : ""),
     el("span", {}, t("tk.next") + " ", el("b", { class: "num", id: "tk-next" }, dur(next - now))),
@@ -528,12 +555,15 @@ function renderStart() {
     go.addEventListener("click", () => unlock(pw.value, go, err));
     pw.addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(pw.value, go, err); });
     s1.append(el("p", { class: "muted" }, t("key.lockeddesc"), " ", didEl(S.vault.did)), el("div", { class: "row" }, el("div", { class: "field" }, pw), go), err,
-      el("button", { class: "btn small ghost", type: "button", onclick: forgetKey }, t("key.other")));
+      el("div", { class: "row alt" }, el("button", { class: "btn small ghost", type: "button", onclick: restoreFlow }, t("key.have")),
+        el("button", { class: "btn small ghost", type: "button", onclick: forgetKey }, t("key.other"))));
   } else {
     s1s.append(statusNode(false, t("s1.todo")));
-    s1.append(el("div", { class: "seg" },
-      el("button", { type: "button", onclick: createKeyFlow, disabled: !S.ed25519 }, el("b", {}, t("key.create")), el("span", {}, t("key.createdesc"))),
-      el("button", { type: "button", onclick: importKeyFlow, disabled: !S.ed25519 }, el("b", {}, t("key.have")), el("span", {}, t("key.havedesc")))));
+    s1.append(
+      el("button", { class: "btn primary big", type: "button", onclick: createKeyFlow, disabled: !S.ed25519 }, t("key.create")),
+      el("p", { class: "hint cta-hint" }, t("key.createdesc")),
+      el("div", { class: "row alt" }, el("button", { class: "btn ghost small", type: "button", onclick: restoreFlow, disabled: !S.ed25519 }, t("key.have")), el("span", { class: "hint" }, t("key.havedesc"))),
+      el("details", { class: "cli-note" }, el("summary", { class: "hint" }, t("key.clisum")), el("p", { class: "hint" }, t("key.clinote"))));
   }
   // step 2
   const s2 = clear($("s2-body")), s2s = clear($("s2-status"));
@@ -574,7 +604,7 @@ function renderOfferForm() {
   const px = el("input", { class: "input num", inputmode: "decimal", value: f.px });
   const qty = el("input", { class: "input num", inputmode: "decimal", value: f.qty });
   const slider = el("input", { type: "range", min: "10", max: String(Math.max(10, Number(maxQ))), step: "1", value: String(C.cents(f.qty) || 100n) });
-  const ttl = el("select", { class: "select" }, [[3, "15m"], [6, "30m"], [12, "1h"], [24, "2h"], [72, "6h"]].map(([v, l]) => el("option", { value: String(v), selected: Number(f.ttl) === v }, l)));
+  const ttl = el("select", { class: "select" }, [[3, "15" + t("u.m")], [6, "30" + t("u.m")], [12, "1" + t("u.h")], [24, "2" + t("u.h")], [72, "6" + t("u.h")]].map(([v, l]) => el("option", { value: String(v), selected: Number(f.ttl) === v }, l)));
   const taker = el("input", { class: "input mono", placeholder: "did:key:z6Mk… (" + t("tr.optional") + ")", value: f.taker, spellcheck: "false" });
   const summary = el("div"), warn = el("div");
   const go = el("button", { class: "btn primary wide", type: "button" }, t("tr.signpublish"));
@@ -876,7 +906,7 @@ function renderLearn() {
     ...sec("ln.h2", "ln.p2a", "ln.p2b", "ln.p2c"),
     ...sec("ln.h3", "ln.p3a", "ln.p3b"),
     el("h2", {}, t("ln.faq")),
-    ...["q1", "q2", "q3", "q4", "q5", "q6", "q7"].map((q) => el("details", {}, el("summary", {}, t("ln." + q)), el("p", {}, t("ln." + q + "a")))),
+    ...["q8", "q1", "q2", "q3", "q4", "q5", "q6", "q7"].map((q) => el("details", {}, el("summary", {}, t("ln." + q)), el("p", {}, t("ln." + q + "a")))),
     el("h2", {}, t("ln.h4")), el("p", {}, t("ln.p4")),
     el("p", {}, el("a", { href: "https://github.com/sprmn24/technocore-closecall-agent" }, "github.com/sprmn24/technocore-closecall-agent")),
   );
@@ -912,8 +942,8 @@ function setLang(l) {
 async function boot() {
   let saved = null;
   try { saved = localStorage.getItem("cc-lang"); } catch { /* ignore */ }
-  const nav = (navigator.language || "en").slice(0, 2);
-  setLang(saved || (STRINGS[nav] ? nav : "en"));
+  const prefs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || "en"]).map((l) => String(l).slice(0, 2).toLowerCase());
+  setLang(saved || prefs.find((l) => STRINGS[l]) || "en");
   $("lang").addEventListener("change", (e) => setLang(e.target.value));
   let theme = null; try { theme = localStorage.getItem("cc-theme"); } catch { /* ignore */ }
   if (theme) document.documentElement.dataset.theme = theme;

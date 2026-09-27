@@ -18,4 +18,4 @@ build-backend = "setuptools.build_meta"
 packages = ["closecall"]
 
 [tool.setuptools.package-data]
-closecall = ["contest.json", "web/*.html", "web/*.js", "web/*.css"]
+closecall = ["contest.json", "web/*.html", "web/*.js", "web/*.css", "web/i18n/*.js"]

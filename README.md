@@ -8,8 +8,9 @@ settled against Hyperliquid's `xyz:NVDA`. The three best scores share 1,000,000 
 
 This repository gives anyone a way in, including people who have never touched Technocore:
 
-- **A web app**: create or import a key, register, and trade from the browser. It comes in
-  English, Türkçe, Français and العربية.
+- **A web app**: one click to get a contest key, one to register, then trade from the browser.
+  It never asks anyone to type or paste a seed. Available in English, Português (Brasil), 日本語,
+  한국어, العربية, Türkçe and Français.
 - **A command-line agent** for automation and power users.
 
 > **Unofficial community tool.** Not affiliated with FLOP Labs, Technocore, Hyperliquid or
@@ -21,7 +22,7 @@ This repository gives anyone a way in, including people who have never touched T
 
 | Tab | What it does |
 |---|---|
-| **Start** | Three steps: create a key (or import your existing seed), register, make a first trade |
+| **Start** | Three steps: "Start playing" (creates a key and a recovery file), register, make a first trade |
 | **Trade** | Publish a signed offer (buy/sell, price, size, validity) with fee, collateral, break-even and P&L scenarios; browse the offer board and accept other players' offers |
 | **My account** | Your key (backup, lock, remove), an estimated position and P&L, and every message you signed with its referee outcome |
 | **Market** | Live NVIDIA reference and ±5% band, players, open interest, leaderboard, largest positions, sweeps, recent trades with verified signatures |
@@ -31,15 +32,18 @@ This repository gives anyone a way in, including people who have never touched T
 
 - **No server.** The page is static and runs on GitHub Pages. Your browser talks to
   `technocore.chat` and `api.hyperliquid.xyz` directly and checks every signature itself.
-- **Your key never leaves your browser.** It is generated with WebCrypto, used for Ed25519
-  signing, and stored encrypted in `localStorage` (PBKDF2-SHA256 with 600k iterations, then
-  AES-GCM). The encryption password never leaves the page. You must save a backup before you continue.
+- **No seed entry, ever.** The key is generated with WebCrypto in the browser and stored encrypted
+  in `localStorage` (PBKDF2-SHA256 with 600k iterations, then AES-GCM). The backup is a recovery
+  *file* the player downloads before continuing; restoring means picking that file, which is read
+  locally and never uploaded. The site has no field for pasting a seed or private key, so "paste
+  your seed" is always a scam signal. Players with an existing Technocore key don't need it, since
+  any `did:key` can play; if they want to use it, the CLI keeps it in their own terminal.
 - **Locked down.** The Content-Security-Policy allows scripts only from the site itself and
   network requests only to technocore.chat and Hyperliquid. Every string from the network is
   rendered as text, never as HTML.
-- **Same keys everywhere.** A seed is 64 hex characters or a passphrase (SHA-256'd). This is
-  byte-compatible with technocore-chat's `scripts/sign.py` and with the CLI below. The tests
-  check the browser against the same golden vectors and against a real trade captured from `close1`.
+- **Same keys everywhere.** The secret key in a recovery file works with the CLI below and with
+  technocore-chat's `scripts/sign.py`. The tests check the browser against the same golden vectors
+  and against a real trade captured from `close1`.
 
 Only use the app at its official address. A copy hosted elsewhere could steal keys.
 
@@ -95,7 +99,7 @@ hidden prompt and is never written to disk.
 ```sh
 python3 -m unittest discover -s tests -v        # Python: protocol, signing, fees vs the fold, network mocks
 node tests/web/core.test.mjs                    # browser core: golden vectors, live trade, fees, vault
-node tests/web/i18n.test.mjs                    # every UI string in all four languages
+node tests/web/i18n.test.mjs                    # every UI string in all seven languages
 ```
 
 `.github/workflows/pages.yml` publishes `closecall/web` to GitHub Pages on every push to `main`
@@ -118,7 +122,7 @@ Apache-2.0.
 **Uygulama:** https://sprmn24.github.io/technocore-closecall-agent/
 
 Technocore **Close Call** yarışmasına tarayıcıdan katılmak için gayriresmî ve açık kaynak bir araç.
-Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: anahtar oluştur (ya da mevcut
-seed'ini içe aktar), tek tıkla kayıt ol, teklif ver veya bir teklifi kabul et. Arayüz Türkçe,
-İngilizce, Fransızca ve Arapça. Anahtarın tarayıcından hiç çıkmaz ve şifrenle şifrelenerek
-saklanır. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.
+Technocore'u hiç kullanmamış biri de şu adımlarla katılabilir: "Oynamaya başla" ile anahtar ve
+kurtarma dosyası oluştur, tek tıkla kayıt ol, teklif ver ya da bir teklifi kabul et. Site hiçbir
+zaman seed ya da özel anahtar istemez. Arayüz İngilizce, Portekizce (Brezilya), Japonca, Korece,
+Arapça, Türkçe ve Fransızca. Sitenin sunucusu yok. Sadece oyun parası; yatırım tavsiyesi değildir.

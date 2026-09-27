@@ -17,6 +17,7 @@ FILES = {
     "/core.js": ("core.js", "text/javascript; charset=utf-8"),
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
+    **{f"/i18n/{lang}.js": (f"i18n/{lang}.js", "text/javascript; charset=utf-8") for lang in ("en", "pt", "ja", "ko", "ar", "tr", "fr")},
 }
 
 
