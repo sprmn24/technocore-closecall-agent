@@ -24,4 +24,12 @@ const v = await C.sealSeed(await C.seedFromInput("11".repeat(32)), "correct hors
 eq(C.bytesToHex(await C.openSeed(v, "correct horse")), "11".repeat(32), "vault roundtrip");
 try { await C.openSeed(v, "wrong"); eq(1, 0, "vault wrong pw"); } catch (e) { eq(e.message, "wrong password", "vault wrong pw"); }
 
+// pasted DIDs: bare "z6Mk…", spaces, quotes, zero-width characters
+{
+  const d = "did:key:z6Mkeon34jGxGkm6tKxLDMhD7zNh6w3KoGTn4FxsyZHeQfXF";
+  eq(C.normalizeDid(" " + d.slice(8) + "\n"), d, "bare z6Mk gets did:key:");
+  eq(C.normalizeDid("\u200b\"" + d + "\""), d, "quotes and zero-width stripped");
+  eq(C.normalizeDid(""), "", "empty stays empty");
+}
+
 if (process.exitCode) console.error("FAILED"); else console.log("all core tests passed");

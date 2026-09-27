@@ -258,7 +258,7 @@ async function haveDidFlow() {
     const err = el("p", { class: "hint bad" });
     const go = el("button", { class: "btn primary", type: "button" }, t("dm.go"));
     const submit = () => {
-      const v = inp.value.trim();
+      const v = C.normalizeDid(inp.value);
       if (!C.DID_RE.test(v)) { err.textContent = t("dm.bad"); return; }
       setWatch(v); close(true);
     };
@@ -412,7 +412,7 @@ async function publishOffer(btn) {
   const mode = needKey();
   if (!mode) return;
   const f = S.form, qC = C.cents(f.qty), pC = C.cents(f.px);
-  const taker = f.taker.trim() || "any";
+  const taker = C.normalizeDid(f.taker) || "any";
   let terms;
   try {
     if (!qC || !pC) throw new Error(t("tr.badnum"));
@@ -1218,7 +1218,7 @@ function renderLeaders() {
     tile(t("lb.asof"), L ? t("tr.sweep") + " " + L.n : "–", L ? t("lb.asoffoot", { mark: L.mark }) : ""),
   );
   $("lb-search").placeholder = t("lb.search");
-  const q = $("lb-search").value.trim(), found = clear($("lb-found"));
+  const q = C.normalizeDid($("lb-search").value), found = clear($("lb-found"));
   if (q) {
     const g = groups.find((x) => x.keys.includes(q));
     found.append(g ? t("lb.found", { rank: rankLabel(g), v: fmt(g.v) }) : C.DID_RE.test(q) ? t("lb.notfound") : t("tr.badtaker"));

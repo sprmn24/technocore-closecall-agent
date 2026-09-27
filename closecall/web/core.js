@@ -20,6 +20,11 @@ export const REFEREE_ROOMS = ["d-close1-flow", "d-close1-state", "d-close1-price
 export const PACKAGE_SHA256 = "bae09812e25eb6f1369c611f24964f7ea0acafddfc45301a16f33f941296dafa";
 
 export const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+/** A DID as people paste it: spaces or quotes around it, or just the "z6Mk…" part without "did:key:". */
+export function normalizeDid(text) {
+  const v = String(text ?? "").replace(/[\s\u200b-\u200d\ufeff"'`<>]/g, "");
+  return /^z6Mk/.test(v) ? "did:key:" + v : v;
+}
 const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const AMOUNT_RE = /^[0-9]{1,7}(\.[0-9]{1,2})?$/;

@@ -28,6 +28,8 @@ def out(obj) -> None:
 
 def _me(expect: str | None = None):
     """The signing key; with `expect` (--as), refuse unless it is that did:key."""
+    if expect is not None:
+        expect = keys.normalize_did(expect)
     if expect is not None and not keys.DID_RE.fullmatch(expect):
         raise SystemExit(f"--as: not an Ed25519 did:key: {expect!r}")
     k = keys.load_key()
@@ -168,7 +170,7 @@ def cmd_offer(a) -> None:
         lo, hi = P.limits(ref)
         raise SystemExit(f"px {a.px} is outside the 5% band [{lo:.2f}, {hi:.2f}] of ref {ref}: it would void")
     until = a.until if a.until is not None else P.next_sweep() + a.ttl - 1
-    terms = P.make_terms(did, a.side, a.qty, a.px, a.taker, until, a.id)
+    terms = P.make_terms(did, a.side, a.qty, a.px, a.taker if a.taker == "any" else keys.normalize_did(a.taker), until, a.id)
     sig = keys.sign(key, P.maker_payload(terms))
     res = {"terms": terms, "maker_sig": sig, "offer_json": P.offer_msg(terms, sig)}
     if a.post:

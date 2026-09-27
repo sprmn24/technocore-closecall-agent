@@ -265,6 +265,15 @@ class AsDidAndDeskLookup(unittest.TestCase):
             self.cli.main(["register", "--as", DA])
         self.assertTrue(json.loads(buf.getvalue())["dry_run"])
 
+    def test_as_accepts_bare_z6mk(self):
+        import io
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.cli.main(["register", "--as", " " + DA[len("did:key:"):] + " "])
+        self.assertTrue(json.loads(buf.getvalue())["dry_run"])
+        self.assertEqual(keys.normalize_did('"%s"' % DA), DA)
+
     def test_accept_by_offer_id_from_desk(self):
         import io
         from contextlib import redirect_stdout

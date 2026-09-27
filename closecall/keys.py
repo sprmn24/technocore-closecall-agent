@@ -19,6 +19,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 CODEC = b"\xed\x01"
 DID_RE = re.compile(r"did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}")
+
+
+def normalize_did(text: str) -> str:
+    """A DID as people paste it: surrounding spaces or quotes, or just the "z6Mk..." part."""
+    v = re.sub(r"[\s\u200b-\u200d\ufeff\"'`<>]", "", text or "")
+    return "did:key:" + v if v.startswith("z6Mk") else v
 SIG_RE = re.compile(r"[A-Za-z0-9_-]{86}")
 
 
