@@ -23,7 +23,7 @@ This repository gives anyone a way in, including people who have never touched T
 | Tab | What it does |
 |---|---|
 | **Start** | Two ways in. **Create a new DID**: one click, the seed is shown once with copy/download and clear warnings. **I already have a DID**: enter your public DID; the site shows your account and gives you a one-line `closecall` command for every action, so your seed stays in your own terminal. Then register and make a first trade |
-| **Trade** | Publish a signed offer (buy/sell, price, size, validity) with fee, collateral, break-even and P&L scenarios; browse the offer board and accept other players' offers |
+| **Trade** | An order board of everyone waiting for a counterparty: best buyer, best seller, spread, and one-click **Buy**/**Sell** on any waiting offer, so nobody has to wait for a match. Publish your own offer (price, size, validity) with fee, collateral, break-even and P&L scenarios; the form points out offers that already match your price. Every offer gets a share link that opens straight to its accept screen, and you're told when yours is taken |
 | **My account** | Your key, an estimated position and P&L, and every message you signed with its referee outcome |
 | **Leaderboard** | The referee's top 25 with prize places, tied keys grouped (ties share the places they span), your rank, search by did:key |
 | **Market** | Live NVIDIA reference and ±5% band, players, open interest, leaderboard, largest positions, sweeps, recent trades with verified signatures |

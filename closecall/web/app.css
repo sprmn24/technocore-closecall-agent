@@ -277,3 +277,21 @@ details.group summary { cursor: pointer; color: var(--text); }
 
 .term-badge { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; font-weight: 700; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 0 5px; color: var(--text-2); }
 .cmd .tok { white-space: nowrap; } .cmd .tok.long { white-space: normal; overflow-wrap: anywhere; }
+
+/* order board */
+.book-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 16px; }
+.book-summary > div { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.book-summary .k { color: var(--text-2); font-size: 12.5px; } .book-summary .v { font-size: 18px; font-weight: 650; }
+.book { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.book-h { font-size: 15px; margin: 0; } .buy-h { color: var(--good-text); } .sell-h { color: var(--critical-text); }
+.book-side > .hint { margin: 2px 0 8px; }
+.book table td, .book table th { padding: 7px 6px; }
+.book .px { font-weight: 700; }
+.book tr.mine-row { background: var(--accent-soft); }
+.instant { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.btn.buy { background: var(--good); border-color: var(--good); color: #fff; }
+.btn.sell { background: var(--critical); border-color: var(--critical); color: #fff; }
+.share-link { display: flex; gap: 8px; align-items: center; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.share-link code { flex: 1; overflow-wrap: anywhere; font-size: 12.5px; }
+@media (max-width: 720px) { .book { grid-template-columns: 1fr; } }
+.book-summary .v.small-v { font-size: 15px; }

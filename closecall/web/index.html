@@ -79,6 +79,23 @@
 
   <!-- TRADE -->
   <section class="view" id="view-trade" hidden>
+    <div class="card" id="board">
+      <div class="card-head"><h2 data-i18n="bk.title">Order board</h2><button class="btn ghost small" id="desk-refresh" type="button" data-i18n="ui.refresh">Refresh</button></div>
+      <p class="muted" data-i18n="bk.desc">Everyone waiting for a counterparty. Pick one and trade instantly; no need to wait.</p>
+      <div id="book-summary" class="book-summary"></div>
+      <div class="book">
+        <div class="book-side">
+          <h3 class="book-h buy-h" data-i18n="bk.buyers">Buyers waiting</h3>
+          <p class="hint" data-i18n="bk.buyersdesc">They want to buy. You sell to them.</p>
+          <div id="book-buyers"></div>
+        </div>
+        <div class="book-side">
+          <h3 class="book-h sell-h" data-i18n="bk.sellers">Sellers waiting</h3>
+          <p class="hint" data-i18n="bk.sellersdesc">They want to sell. You buy from them.</p>
+          <div id="book-sellers"></div>
+        </div>
+      </div>
+    </div>
     <div class="cols">
       <div class="card">
         <h2 data-i18n="tr.new">New offer</h2>
@@ -86,10 +103,7 @@
         <div id="offer-form"></div>
       </div>
       <div class="card">
-        <div class="card-head"><h2 data-i18n="tr.board">Offer board</h2><button class="btn ghost small" id="desk-refresh" type="button" data-i18n="ui.refresh">Refresh</button></div>
-        <p class="muted" data-i18n="tr.boarddesc">Open offers from other players. Accepting takes the opposite side at their price.</p>
-        <div id="board"></div>
-        <h3 class="sub-h" data-i18n="tr.mine">My open offers</h3>
+        <h2 data-i18n="tr.mine">My offers</h2>
         <div id="my-offers"></div>
       </div>
     </div>

@@ -430,6 +430,7 @@ async function publishOffer(btn) {
     journalAdd({ kind: "offer", id: terms.id, room: C.DESK_ROOM, seq: rec.seq, terms, maker_sig: sig, role: "maker" });
     toast(t("tr.published"));
     loadDesk();
+    shareModal(terms);
   } catch (e) { toast(t("ui.failed") + ": " + errText(e), true); }
   busy(btn, false); renderTrade();
 }
@@ -506,12 +507,27 @@ async function loadDesk() {
         }
       }
     }
+    const me = myDid();
+    if (S.desk.at && me) {
+      for (const e of journal()) {
+        if (e.kind === "offer" && e.terms && e.terms.maker === me && filled.has(e.id) && !S.desk.filled.has(e.id)) {
+          toast(t("bk.filled", { qty: e.terms.qty, px: e.terms.px }));
+          if (document.hidden) document.title = "● " + t("doc.title");
+        }
+      }
+    }
     S.desk = { offers, filled, at: Date.now(), error: null };
   } catch (e) {
     S.desk.error = e.status === 404 ? null : errText(e);
     if (e.status === 404) S.desk = { offers: [], filled: S.desk.filled, at: Date.now(), error: null };
   }
   renderTrade(); renderStart();
+  if (S.pendingOffer) {
+    const id = S.pendingOffer; S.pendingOffer = null;
+    history.replaceState(null, "", "#trade");
+    const o = openOffers().find((x) => x.terms.id === id && x.terms.maker !== myDid());
+    if (o) acceptOffer(o); else toast(t("bk.notfound"), true);
+  }
 }
 
 async function loadFlow(limit = 50) {
@@ -696,6 +712,13 @@ function renderOfferForm() {
     clear(summary); clear(warn);
     if (!qC || !pc || qC < 10n) { warn.append(el("div", { class: "hint bad" }, t("tr.badnum"))); go.disabled = true; return; }
     go.disabled = !(S.signer || S.watchDid);
+    const hits = instantMatches(f.side, pc);
+    if (hits.length) {
+      const best = hits[0];
+      summary.append(el("div", { class: "callout good instant" },
+        el("span", {}, t("bk.instant", { n: hits.length, qty: best.terms.qty, px: best.terms.px })),
+        el("button", { class: "btn small " + f.side, type: "button", onclick: () => acceptOffer(best) }, t("bk.instantgo"))));
+    }
     summary.append(econNodes(f.side, qC, pc));
     const b = bandProblem(pc); if (b) warn.append(el("div", { class: "callout bad" }, b));
     const need = qC * pc * 101n / 10_000n;
@@ -723,35 +746,86 @@ function renderOfferForm() {
   update();
 }
 
+/** Offers anyone could still take (or my own, marked), deduplicated by id. */
+function openOffers() {
+  const n = C.nextSweep(), me = myDid(), byId = new Map();
+  for (const o of S.desk.offers) {
+    if (o.terms.until < n || S.desk.filled.has(o.terms.id)) continue;
+    if (!(o.terms.taker === "any" || o.terms.taker === me || o.terms.maker === me)) continue;
+    byId.set(o.terms.id, o);
+  }
+  return [...byId.values()];
+}
+const pxOf = (o) => Number(o.terms.px);
+function bookRow(o, me) {
+  const mine = o.terms.maker === me, youSide = o.terms.side === "buy" ? "sell" : "buy";
+  const action = mine
+    ? el("span", {}, el("span", { class: "badge ok" }, t("bk.yours")), " ", el("button", { class: "btn small ghost", type: "button", onclick: () => shareModal(o.terms) }, t("bk.share")))
+    : el("button", { class: "btn small " + youSide, type: "button", onclick: () => acceptOffer(o), disabled: !(S.signer || S.watchDid) }, youSide === "buy" ? t("bk.buyfrom") : t("bk.sellto"));
+  return el("tr", { class: mine ? "mine-row" : null },
+    el("td", { class: "num px" }, fmt(pxOf(o))), el("td", { class: "r num" }, o.terms.qty),
+    el("td", { class: "num" }, dur(C.sweepTime(o.terms.until) - Date.now())), el("td", {}, didEl(o.terms.maker)), el("td", { class: "r" }, action));
+}
+function bookTable(rows, me) {
+  if (!rows.length) return el("div", { class: "empty" }, S.desk.at ? t("bk.none") : t("ui.loading"));
+  return el("div", { class: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {}, [t("bk.pricecol"), t("tr.qty"), t("tr.expires"), t("tr.maker"), ""].map((h, i) => el("th", { class: i === 1 || i === 4 ? "r" : null }, h)))),
+    el("tbody", {}, rows.map((o) => bookRow(o, me)))));
+}
 function renderBoard() {
-  const box = clear($("board"));
-  if (S.desk.error) box.append(el("div", { class: "callout bad" }, S.desk.error));
-  const n = C.nextSweep(), me = myDid();
-  const open = S.desk.offers.filter((o) => o.terms.until >= n && !S.desk.filled.has(o.terms.id) && o.terms.maker !== me && (o.terms.taker === "any" || o.terms.taker === me));
-  const byId = new Map(); for (const o of open) byId.set(o.terms.id, o);
-  const rows = [...byId.values()].sort((a, b) => b.seq - a.seq);
-  if (!rows.length) { box.append(el("div", { class: "empty" }, S.desk.at ? t("tr.noffers") : t("ui.loading"))); }
-  else box.append(el("div", { class: "scroll" }, el("table", {},
-    el("thead", {}, el("tr", {}, [t("tr.maker"), t("tr.youwould"), t("tr.qty"), t("tr.price"), t("tr.expires"), ""].map((h, i) => el("th", { class: i === 2 || i === 3 ? "r" : null }, h)))),
-    el("tbody", {}, rows.map((o) => {
-      const mine = o.terms.side === "buy" ? "sell" : "buy";
-      return el("tr", {}, el("td", {}, didEl(o.terms.maker)), el("td", {}, el("span", { class: mine + "-t" }, mine === "buy" ? t("tr.buy") : t("tr.sell"))),
-        el("td", { class: "r num" }, o.terms.qty), el("td", { class: "r num" }, o.terms.px),
-        el("td", { class: "num" }, dur(C.sweepTime(o.terms.until) - Date.now())),
-        el("td", {}, el("button", { class: "btn small primary", type: "button", onclick: () => acceptOffer(o), disabled: !(S.signer || S.watchDid) }, t("tr.accept"))));
-    })))));
+  const me = myDid(), open = openOffers();
+  const buyers = open.filter((o) => o.terms.side === "buy").sort((a, b) => pxOf(b) - pxOf(a) || a.seq - b.seq);
+  const sellers = open.filter((o) => o.terms.side === "sell").sort((a, b) => pxOf(a) - pxOf(b) || a.seq - b.seq);
+  const sum = clear($("book-summary"));
+  if (S.desk.error) sum.append(el("div", { class: "callout bad" }, S.desk.error));
+  const bb = buyers[0] ? pxOf(buyers[0]) : null, ba = sellers[0] ? pxOf(sellers[0]) : null, r = refC();
+  const qty = open.reduce((a, o) => a + Number(o.terms.qty), 0);
+  const cell = (k, v, cls) => el("div", {}, el("div", { class: "k" }, k), el("div", { class: "v num " + (cls || "") }, v));
+  sum.append(
+    cell(t("bk.bestbid"), bb != null ? fmt(bb) : "–", "buy-t"),
+    cell(t("bk.bestask"), ba != null ? fmt(ba) : "–", "sell-t"),
+    cell(t("bk.spread"), bb != null && ba != null ? fmt(ba - bb) : "–"),
+    cell(t("tk.ref"), r ? C.fromCents(r) : "–"),
+    cell(t("bk.waitingk"), t("bk.waiting", { n: open.length, q: fmt(qty) }), "small-v"),
+  );
+  clear($("book-buyers")).append(bookTable(buyers, me));
+  clear($("book-sellers")).append(bookTable(sellers, me));
+
   const mineBox = clear($("my-offers"));
   const mineRows = journal().filter((e) => e.kind === "offer" && e.terms).reverse().slice(0, 20);
   if (!mineRows.length) { mineBox.append(el("div", { class: "empty" }, t("tr.nomine"))); return; }
   mineBox.append(el("div", { class: "scroll" }, el("table", {},
-    el("thead", {}, el("tr", {}, [t("tr.side"), t("tr.qty"), t("tr.price"), t("tr.status")].map((h, i) => el("th", { class: i === 1 || i === 2 ? "r" : null }, h)))),
+    el("thead", {}, el("tr", {}, [t("tr.side"), t("tr.qty"), t("tr.price"), t("tr.status"), ""].map((h, i) => el("th", { class: i === 1 || i === 2 ? "r" : null }, h)))),
     el("tbody", {}, mineRows.map((e) => {
       const filled = S.desk.filled.has(e.id) || journal().some((x) => x.kind === "trade" && x.id === e.id);
       const expired = C.nextSweep() > e.terms.until;
       const st = filled ? el("span", { class: "badge ok" }, t("st.filled")) : expired ? el("span", { class: "badge neutral" }, t("st.expired")) : el("span", { class: "badge warn" }, t("st.open") + " · " + dur(C.sweepTime(e.terms.until) - Date.now()));
-      return el("tr", {}, el("td", {}, el("span", { class: e.terms.side + "-t" }, e.terms.side === "buy" ? t("tr.buy") : t("tr.sell"))), el("td", { class: "r num" }, e.terms.qty), el("td", { class: "r num" }, e.terms.px), el("td", {}, st));
+      return el("tr", {}, el("td", {}, el("span", { class: e.terms.side + "-t" }, e.terms.side === "buy" ? t("tr.buy") : t("tr.sell"))), el("td", { class: "r num" }, e.terms.qty), el("td", { class: "r num" }, e.terms.px), el("td", {}, st),
+        el("td", {}, !filled && !expired ? el("button", { class: "btn small ghost", type: "button", onclick: () => shareModal(e.terms) }, t("bk.share")) : ""));
     })))));
 }
+
+/** Offers on the other side that already match a price I am about to post: trade now instead of waiting. */
+function instantMatches(side, pxC) {
+  const me = myDid(), px = Number(pxC) / 100;
+  return openOffers().filter((o) => o.terms.maker !== me && o.terms.side !== side && (side === "buy" ? pxOf(o) <= px : pxOf(o) >= px))
+    .sort((a, b) => (side === "buy" ? pxOf(a) - pxOf(b) : pxOf(b) - pxOf(a)) || a.seq - b.seq);
+}
+
+const offerLink = (id) => `${location.origin}${location.pathname}#trade/o/${encodeURIComponent(id)}`;
+async function shareModal(terms) {
+  const link = offerLink(terms.id);
+  const text = t("bk.tweet", { side: terms.side === "buy" ? t("tr.buy") : t("tr.sell"), qty: terms.qty, px: terms.px });
+  const x = "https://twitter.com/intent/tweet?" + new URLSearchParams({ text, url: link }).toString();
+  await modal((close) => [
+    el("h2", {}, t("bk.sharetitle")),
+    el("p", { class: "muted" }, t("bk.sharedesc")),
+    el("div", { class: "share-link" }, el("code", { class: "mono" }, link), el("button", { class: "btn small", type: "button", onclick: () => copy(link) }, t("bk.copylink"))),
+    el("div", { class: "modal-actions" }, el("button", { class: "btn ghost", type: "button", onclick: () => close() }, t("ui.close")),
+      el("a", { class: "btn primary", href: x, target: "_blank", rel: "noopener noreferrer" }, t("bk.sharex"))),
+  ]);
+}
+
 function renderTrade() { if (S.view !== "trade") return; renderOfferForm(); renderBoard(); }
 
 // ---- rendering: account ------------------------------------------------------------------
@@ -1053,7 +1127,8 @@ function renderAll() {
   renderStartLeader();
 }
 function route() {
-  const v = (location.hash || "#start").slice(1);
+  const [v, k, id] = (location.hash || "#start").slice(1).split("/");
+  if (v === "trade" && k === "o" && id) S.pendingOffer = decodeURIComponent(id);
   S.view = ["start", "trade", "account", "leaders", "market", "learn"].includes(v) ? v : "start";
   document.querySelectorAll(".view").forEach((n) => { n.hidden = n.id !== "view-" + S.view; });
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === S.view));
@@ -1092,6 +1167,7 @@ async function boot() {
   S.signer = await C.loadDeviceKey();
   S.watchDid = S.signer ? null : loadWatch();
   addEventListener("hashchange", route);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = t("doc.title"); });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => S.view === "market" && renderCharts(), 150); });
   route();
   await loadTicker();
