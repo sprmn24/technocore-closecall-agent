@@ -984,19 +984,24 @@ function accountBook() {
     if (status !== "void" && g && g.sweep != null && it.sweep < g.sweep) { status = "void"; reason = "not_owner"; }
     const row = { kind: "trade", at: it.at, sweep: it.sweep, id: e.id, side: mySide, qty: e.terms.qty, px: e.terms.px, status, reason, n: f && f.n, delta: 0n, fee: 0n };
     if (status !== "void") {
+      // Per-trade P&L: a lot's gain is credited to the trade that opened it (row.gain), realized when a
+      // later trade closes it, marked at the reference while open. Sum of (gain - fee) over rows = score.
+      row.gain = 0n; row.openC = 0n; row.closedC = 0n;
       const before = cash, fee = qC * pC / 100n;
-      if (e.terms.maker === e.taker) { cash -= 2n * fee; fees += 2n * fee; row.fee = 2n * fee; }
+      if (e.terms.maker === e.taker) { cash -= 2n * fee; fees += 2n * fee; row.fee = 2n * fee; row.self = true; }
       else {
         const side = mySide === "buy" ? 1n : -1n;
         cash -= fee; fees += fee; row.fee = fee;
         let left = qC;
         while (left > 0n && lots.length && lots[0][0] * side < 0n) {
-          const [lq, lp] = lots[0], held = lq < 0n ? -lq : lq, size = left < held ? left : held;
+          const [lq, lp, owner] = lots[0], held = lq < 0n ? -lq : lq, size = left < held ? left : held;
           cash += side < 0n ? size * pC : size * (2n * lp - pC);
+          owner.gain += side < 0n ? size * (pC - lp) : size * (lp - pC);
+          owner.openC -= size; owner.closedC += size; row.closer = true;
           left -= size;
           if (size === held) lots.shift(); else lots[0][0] = lq + side * size;
         }
-        if (left > 0n) { cash -= left * pC; lots.push([side * left, pC]); }
+        if (left > 0n) { cash -= left * pC; lots.push([side * left, pC, row]); row.openC += left; }
       }
       row.delta = cash - before; count++;
     }
@@ -1008,6 +1013,12 @@ function accountBook() {
   const locked = lots.reduce((a, [q, p]) => a + abs(q) * p, 0n);
   const r = refC();
   const value = r ? cash + lots.reduce((a, [q, p]) => a + (q > 0n ? q * r : -q * (2n * p - r)), 0n) : null;
+  // q * (r - p) is the open gain for a long (q > 0) and a short (q < 0) alike.
+  if (r) for (const [q, p, owner] of lots) owner.unreal = (owner.unreal || 0n) + q * (r - p);
+  for (const row of rows) {
+    if (row.gain == null) continue;
+    row.pnl = row.openC > 0n && !r ? null : row.gain + (row.unreal || 0n) - row.fee;
+  }
   const granted = g ? MINT : 0n;
   const realized = cash + locked + fees - granted;
   const avg = lots.length ? lots.reduce((a, [q, p]) => a + abs(q) * p, 0n) / (abs(pos) || 1n) : null;
@@ -1070,8 +1081,14 @@ function renderBalance(B) {
     tileC(t("bal.score"), B.score != null ? polf(B.score, true) : "–",
       B.unrealized != null ? t("bal.scorefoot", { r: polf(B.realized - B.fees, true), u: polf(B.unrealized, true) }) : "", sgn(B.score))));
   const tb = el("table", { id: "t-statement" });
-  tb.append(el("thead", {}, el("tr", {}, [t("ac.time"), t("tr.sweep"), t("bal.col.item"), t("bal.col.fee"), t("bal.col.change"), t("bal.col.after"), t("tr.status")]
-    .map((h, i) => el("th", { class: i >= 3 && i <= 5 ? "r" : null }, h)))));
+  tb.append(el("thead", {}, el("tr", {}, [t("ac.time"), t("tr.sweep"), t("bal.col.item"), t("bal.col.pnl"), t("bal.col.fee"), t("bal.col.change"), t("bal.col.after"), t("tr.status")]
+    .map((h, i) => el("th", { class: i >= 3 && i <= 6 ? "r" : null, title: i === 3 ? t("bal.pnl.tip") : null }, h)))));
+  const refPx = refC() ? C.fromCents(refC()) : "–";
+  const pnlFoot = (row) => row.self ? t("bal.pnl.self")
+    : row.openC > 0n ? (row.closedC > 0n ? t("bal.pnl.partial", { q: C.fromCents(row.openC), px: refPx }) : t("bal.pnl.open", { px: refPx }))
+      : row.closedC > 0n ? t("bal.pnl.closed") : row.closer ? t("bal.pnl.closer") : "";
+  const pnlCell = (row) => row.pnl == null ? el("td", { class: "r num" }, "–")
+    : el("td", { class: "r num", title: t("bal.pnl.tip") }, el("div", { class: sgn(row.pnl).trim() }, polf(row.pnl, true)), el("div", { class: "hint" }, pnlFoot(row)));
   const body = el("tbody");
   for (const row of B.rows.slice().reverse()) {
     const item = row.kind === "mint" ? t("bal.row.mint")
@@ -1081,12 +1098,19 @@ function renderBalance(B) {
       el("td", { class: "num" }, row.at ? utcFull(row.at) : "–"),
       el("td", { class: "num" }, row.sweep >= 0 ? "#" + row.sweep : "–"),
       el("td", {}, item),
+      pnlCell(row),
       el("td", { class: "r num", title: row.fee ? t("bal.feetip") : "" }, row.fee ? fmt(P4(row.fee)) : "–"),
       el("td", { class: "r num" + sgn(row.delta) }, row.delta ? polf(row.delta, true) : "0"),
       el("td", { class: "r num" }, fmt(P4(row.after))),
       el("td", {}, balanceStatus(row))));
   }
   tb.append(body);
+  const traded = B.rows.filter((row) => row.pnl !== undefined);
+  if (B.score != null && traded.length && traded.every((row) => row.pnl != null)) {
+    const total = traded.reduce((a, row) => a + row.pnl, 0n);
+    tb.append(el("tfoot", {}, el("tr", {}, el("td", { colspan: 3 }, t("bal.pnl.total")),
+      el("td", { class: "r num" + sgn(total) }, polf(total, true)), el("td", { colspan: 4 }))));
+  }
   box.append(el("h3", {}, t("bal.statement")), el("p", { class: "hint" }, t("bal.statementdesc")), el("div", { class: "scroll" }, tb),
     el("p", { class: "hint" }, t("bal.note")));
 }
