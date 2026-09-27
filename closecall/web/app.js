@@ -13,6 +13,7 @@ const S = {
   live: null,             // referee looks live?
   desk: { offers: [], filled: new Set(), at: 0, error: null },
   flowIndex: new Map(),   // trade id -> {outcome, reason, n}
+  refs: new Map(),        // sweep n -> referee reference price (cents); it sets sweep n+1's band
   market: null,
   leaders: null,          // latest referee pnl post
   trust: null,
@@ -540,6 +541,7 @@ async function loadTicker() {
   const [p, h] = await Promise.allSettled([C.readRoom("d-close1-price", { limit: 3 }), C.hlLast()]);
   if (p.status === "fulfilled") {
     const posts = C.signedJson(p.value).filter((m) => m.json.t === "price");
+    for (const m of posts) noteRef(m.json);
     if (posts.length) { S.price = { ...posts[posts.length - 1].json, _from: posts[posts.length - 1].from, _ts: posts[posts.length - 1].ts }; }
     tickerFails = 0;
   } else tickerFails++;
@@ -649,6 +651,7 @@ async function loadMarket() {
   }
   const counts = {};
   for (const m of feed) if (m.json.season === C.SEASON) counts[m.json.t] = (counts[m.json.t] || 0) + 1;
+  for (const j of pick(price, "price")) noteRef(j);
   S.market = { price: pick(price, "price"), state: pick(state, "state"), pos: pick(pos, "positions"), pnl: pick(pnl, "pnl"), flow: pick(flow, "flow"), trades, counts, scanned: feed.length, at: Date.now() };
   renderMarket();
   if (!S.trust) loadTrust();
@@ -944,6 +947,36 @@ const lastSweepDone = () => (S.price && Number.isInteger(S.price.n) ? S.price.n 
 /** The sweep that picks up a message stamped at `ms`. */
 const entrySweep = (e) => e.sweep ?? C.nextSweep(e.at ?? e.ts);
 
+/** Remember a referee price post's reference: it sets the band for the sweep after it. */
+function noteRef(j) {
+  if (!j || j.t !== "price" || !Number.isInteger(j.n) || !j.ref || j.ref.px == null) return;
+  const c = C.cents(String(j.ref.px));
+  if (c) S.refs.set(j.n, c);
+}
+/** The fold's checks a trade can fail on its own terms: expiry, lock, and the band (when that sweep's reference is known). */
+function ruleProblem(terms, sweep) {
+  if (sweep > terms.until) return "expired";
+  if (sweep > C.LOCK_SWEEP) return "locked";
+  const ref = S.refs.get(sweep - 1), pxC = C.cents(terms.px);
+  if (ref && pxC && !C.withinLimits(pxC, ref)) return "limits";
+  return null;
+}
+/** Older references come from the price room's archive, fetched once, only when a trade the referee didn't list needs one. */
+let refsLoad = null;
+function needRefs() {
+  if (refsLoad) return;
+  const miss = journal().some((e) => e.kind === "trade" && e.terms && !S.flowIndex.has(e.id) && entrySweep(e) > 0 && !S.refs.has(entrySweep(e) - 1));
+  if (!miss) return;
+  const referee = S.price && S.price._from;
+  refsLoad = C.exportRoom("d-close1-price").then((recs) => {
+    for (const rec of recs) {
+      if (referee && rec.from !== referee) continue;
+      try { noteRef(JSON.parse(rec.text)); } catch { /* not JSON */ }
+    }
+    renderAll();
+  }).catch(() => { /* keep what we have; the band check is skipped for those trades */ });
+}
+
 /** When the referee's 10,000 POLF arrives, from this browser's registration entry. */
 function grantInfo() {
   const j = journal(), e = j.find((x) => x.kind === "owner");
@@ -982,15 +1015,28 @@ function accountBook() {
     const f = S.flowIndex.get(e.id);
     let status = f ? f.outcome : it.sweep > done ? "pending" : "assumed", reason = f ? f.reason : null;
     if (status !== "void" && g && g.sweep != null && it.sweep < g.sweep) { status = "void"; reason = "not_owner"; }
-    const row = { kind: "trade", at: it.at, sweep: it.sweep, id: e.id, side: mySide, qty: e.terms.qty, px: e.terms.px, status, reason, n: f && f.n, delta: 0n, fee: 0n };
+    const self = e.terms.maker === e.taker, side = mySide === "buy" ? 1n : -1n, fee = qC * pC / 100n;
+    // The referee's flow posts list only some outcomes (voids are usually all omitted), so a trade they
+    // don't name is checked here against the fold's rules we can see: expiry, lock, the band set by the
+    // previous sweep's reference, and my own free POLF. The counterparty's funds stay unknown.
+    let local = false;
+    if (!f && status !== "void") {
+      let p = ruleProblem(e.terms, it.sweep);
+      if (!p && !self) {
+        let closable = 0n;
+        for (const [lq] of lots) { if (lq * side >= 0n) break; closable += lq < 0n ? -lq : lq; }
+        if (cash < (qC > closable ? qC - closable : 0n) * pC + fee) p = "funds";
+      }
+      if (p) { status = "void"; reason = p; local = true; }
+    }
+    const row = { kind: "trade", at: it.at, sweep: it.sweep, id: e.id, side: mySide, qty: e.terms.qty, px: e.terms.px, status, reason, local, n: f && f.n, delta: 0n, fee: 0n };
     if (status !== "void") {
       // Per-trade P&L: a lot's gain is credited to the trade that opened it (row.gain), realized when a
       // later trade closes it, marked at the reference while open. Sum of (gain - fee) over rows = score.
       row.gain = 0n; row.openC = 0n; row.closedC = 0n;
-      const before = cash, fee = qC * pC / 100n;
-      if (e.terms.maker === e.taker) { cash -= 2n * fee; fees += 2n * fee; row.fee = 2n * fee; row.self = true; }
+      const before = cash;
+      if (self) { cash -= 2n * fee; fees += 2n * fee; row.fee = 2n * fee; row.self = true; }
       else {
-        const side = mySide === "buy" ? 1n : -1n;
         cash -= fee; fees += fee; row.fee = fee;
         let left = qC;
         while (left > 0n && lots.length && lots[0][0] * side < 0n) {
@@ -1045,6 +1091,7 @@ function balanceStatus(r) {
     return el("span", { class: "badge neutral" }, t("bal.st.none"));
   }
   if (r.status === "settled") return el("span", { class: "badge ok" }, t("st.settled") + (r.n != null ? " · #" + r.n : ""));
+  if (r.status === "void" && r.local) return el("span", { class: "badge bad", title: t("bal.st.localtip") }, t("bal.st.local") + ": " + rsn(r.reason));
   if (r.status === "void") return el("span", { class: "badge bad", title: r.reason || "" }, t("st.void") + ": " + rsn(r.reason));
   if (r.status === "assumed") return el("span", { class: "badge neutral", title: t("bal.st.assumedtip") }, t("bal.st.assumed"));
   return el("span", { class: "badge warn" }, t("st.pending"));
@@ -1117,6 +1164,7 @@ function renderBalance(B) {
 
 function renderAccount() {
   if (S.view !== "account") return;
+  needRefs();
   const k = clear($("acct-key")), s = clear($("acct-summary"));
   k.append(el("h2", {}, t("ac.key")));
   const did = myDid();
