@@ -16,7 +16,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from . import keys, net, protocol as P, state
+from . import keys, net, state
+from . import protocol as P
 
 MANIFEST_URL = ("https://raw.githubusercontent.com/flop-labs/technocore-close-call-challenge/"
                 "{rev}/manifest.json")

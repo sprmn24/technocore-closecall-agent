@@ -13,8 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 os.environ["CLOSECALL_HOME"] = tempfile.mkdtemp()
 
-from closecall import keys, protocol as P, state  # noqa: E402
-import close_call_fold as fold  # noqa: E402
+import close_call_fold as fold
+
+from closecall import keys, state
+from closecall import protocol as P
 
 SIGN_PY = Path(os.environ.get("SIGN_PY", "/nonexistent"))
 A = keys.key_from_seed("11" * 32)
@@ -25,12 +27,12 @@ DA, DB = keys.did_of(A), keys.did_of(B)
 class Keys(unittest.TestCase):
     # Produced by flop-labs/technocore-chat@0e47f77 scripts/sign.py:
     #   sign.py say --seed <seed> close1 123 '{"a":1}'
-    GOLDEN = [
+    GOLDEN = (
         ("11" * 32, "did:key:z6MktULudTtAsAhRegYPiZ6631RV3viv12qd4GQF8z1xB22S",
          "Y5zTkL4o2FRJBhz7BN1Kp2RwWwTyzKWBu88_BLOIX4fbzAVVqIhCRavfMKrUsKzG2cocUBCFlsOGlSDVvYWHBw"),
         ("alice passphrase", "did:key:z6MknXamaMKvJQPsnZ7BkipJyxbpaJ9Fcmbnk4iQmyBF64MS",
          "LEFSIMqnJbv4ta-oZTDV1tBqHlXSyXXOvbjC4RknBNF8dCQ7mtpdzok0vzwTGSEj2W2v-t2xIhOsEinya-EwDw"),
-    ]
+    )
 
     def test_matches_technocore_sign_py_vectors(self):
         for seed, did, sig in self.GOLDEN:
@@ -61,7 +63,7 @@ class Protocol(unittest.TestCase):
     def test_terms_canonical_matches_spec_example(self):
         t = {"id": "a7f3", "maker": DA, "px": "181.20", "qty": "2", "side": "sell", "taker": "any", "until": 1236}
         self.assertEqual(P.terms_string(t),
-                         '{"id":"a7f3","maker":"%s","px":"181.20","qty":"2","side":"sell","taker":"any","until":1236}' % DA)
+                         '{"id":"a7f3","maker":"' + DA + '","px":"181.20","qty":"2","side":"sell","taker":"any","until":1236}')
         self.assertTrue(P.maker_payload(t).startswith("close-1|terms|{"))
         self.assertTrue(P.taker_payload(t, DB).endswith("}|" + DB))
 
@@ -90,7 +92,7 @@ class Protocol(unittest.TestCase):
 
     def test_shape_rules(self):
         for bad in ({"qty": "0.09"}, {"px": "1.234"}, {"side": "long"}, {"id": "a b"}):
-            args = dict(maker=DA, side="buy", qty="1", px="100", taker="any", until=5, tid="x")
+            args = {"maker": DA, "side": "buy", "qty": "1", "px": "100", "taker": "any", "until": 5, "tid": "x"}
             args.update({"tid" if k == "id" else k: v for k, v in bad.items()})
             with self.assertRaises(ValueError):
                 P.make_terms(**args)
@@ -272,7 +274,7 @@ class AsDidAndDeskLookup(unittest.TestCase):
         with redirect_stdout(buf):
             self.cli.main(["register", "--as", " " + DA[len("did:key:"):] + " "])
         self.assertTrue(json.loads(buf.getvalue())["dry_run"])
-        self.assertEqual(keys.normalize_did('"%s"' % DA), DA)
+        self.assertEqual(keys.normalize_did(f'"{DA}"'), DA)
 
     def test_accept_by_offer_id_from_desk(self):
         import io
