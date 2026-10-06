@@ -439,5 +439,15 @@ export default {
  "sh.later": "Você também pode carregar sua chave neste navegador depois, para assinar aqui com um clique.",
  "bal.unknown": "Este navegador não tem registro da inscrição deste DID. O árbitro não publica quem se registrou, então o site só sabe o que foi assinado aqui. Se você já o registrou (em outro aparelho, em outro endereço ou no terminal), marque abaixo e seu saldo aparece.",
  "bal.grantassumed": "+10.000 POLF do árbitro. Este DID tem negociações, então está registrado; o registro foi feito fora deste navegador.",
- "dm.registered": "Este DID já está registrado no concurso (no meu terminal ou em outro aparelho)"
+ "dm.registered": "Este DID já está registrado no concurso (no meu terminal ou em outro aparelho)",
+ "end.title": "O Close Call terminou",
+ "end.desc": "As negociações foram travadas em 4 de outubro às 09:00 UTC. A classificação mais recente do árbitro está em Classificação; seu saldo e seu extrato continuam em Minha conta. Guarde seu arquivo de recuperação: os prêmios serão resgatados depois com esta mesma chave.",
+ "end.short": "Concurso encerrado",
+ "end.tile": "Encerrado",
+ "end.tilefoot": "negociações travadas em 4 de outubro",
+ "end.regclosed": "Inscrições encerradas",
+ "end.regdesc": "O concurso terminou, então novas chaves não podem mais se registrar. Você ainda pode criar um DID aqui e guardá-lo para a Technocore.",
+ "end.tradeclosed": "Negociação encerrada",
+ "end.tradedesc": "As negociações foram travadas em 4 de outubro às 09:00 UTC; novas ofertas e negociações não contam. Seu saldo, extrato e posição final continuam em Minha conta.",
+ "end.leader": "líder na classificação mais recente"
 };

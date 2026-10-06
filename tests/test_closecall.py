@@ -279,6 +279,11 @@ class AsDidAndDeskLookup(unittest.TestCase):
     def test_accept_by_offer_id_from_desk(self):
         import io
         from contextlib import redirect_stdout
+        from unittest import mock
+        # pin the clock before the lock sweep: the CLI refuses to accept after it
+        pinned = mock.patch.object(P, "next_sweep", return_value=P.LOCK_SWEEP - 10)
+        pinned.start()
+        self.addCleanup(pinned.stop)
         t = P.make_terms(DB, "sell", "1", "180.00", "any", P.next_sweep() + 5, "deskid1")
         offer = P.offer_msg(t, keys.sign(B, P.maker_payload(t)))
         forged = json.loads(offer)
@@ -292,3 +297,12 @@ class AsDidAndDeskLookup(unittest.TestCase):
         trade = json.loads(buf.getvalue())["trade"]
         self.assertEqual(trade["terms"]["px"], "180.00")
         self.assertIsNone(P.check_trade(trade))
+
+    def test_accept_refused_after_lock(self):
+        from unittest import mock
+        t = P.make_terms(DB, "sell", "1", "180.00", "any", P.LOCK_SWEEP + 5, "deskid2")
+        offer = P.offer_msg(t, keys.sign(B, P.maker_payload(t)))
+        self.net.read_room = lambda room, **kw: {"messages": [{"seq": 1, "ts": "t", "from": DB, "nonce": 1, "text": offer}]}
+        with mock.patch.object(P, "next_sweep", return_value=P.LOCK_SWEEP + 1), self.assertRaises(SystemExit) as cm:
+            self.cli.main(["accept", "deskid2", "--offline", "--as", DA])
+        self.assertIn("locked", str(cm.exception))

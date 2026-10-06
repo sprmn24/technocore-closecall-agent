@@ -385,6 +385,7 @@ function needKey() {
 }
 
 async function register(btn) {
+  if (ended()) { toast(t("end.short"), true); return; }
   const mode = needKey();
   if (!mode) return;
   if (mode === "terminal") {
@@ -452,6 +453,7 @@ function econNodes(mySide, qC, pC) {
 }
 
 async function publishOffer(btn) {
+  if (ended()) { toast(t("end.short"), true); return; }
   const mode = needKey();
   if (!mode) return;
   const f = S.form, qC = C.cents(f.qty), pC = C.cents(f.px);
@@ -495,6 +497,7 @@ async function publishOffer(btn) {
 }
 
 async function acceptOffer(o) {
+  if (ended()) { toast(t("end.short"), true); return; }
   const mode = needKey();
   if (!mode) return;
   const terms = o.terms, mySide = terms.side === "buy" ? "sell" : "buy";
@@ -672,23 +675,33 @@ async function loadTrust() {
 }
 
 // ---- rendering: header -------------------------------------------------------------------
+/** Trading locked for good: close-1 is over (the fold mints and settles nothing after LOCK_SWEEP). */
+const ended = () => C.nextSweep() > C.LOCK_SWEEP;
+
 function renderBanner() {
   const b = clear($("banner"));
   if (!S.ed25519) b.append(el("div", { class: "callout bad" }, t("err.browser")));
   if (tickerFails >= 2) b.append(el("div", { class: "callout bad" }, t("err.tc")));
-  else if (S.live === false && S.price) b.append(el("div", { class: "callout warn" }, t("err.stale")));
-  if (C.nextSweep() > C.LOCK_SWEEP) b.append(el("div", { class: "callout info" }, t("err.locked")));
+  else if (S.live === false && S.price && !ended()) b.append(el("div", { class: "callout warn" }, t("err.stale")));
+  if (ended()) {
+    b.append(el("div", { class: "callout ended-banner" },
+      el("b", {}, t("end.title")), el("p", {}, t("end.desc")),
+      el("div", { class: "row" }, el("a", { class: "btn small primary", href: "#leaders" }, t("nav.leaders")),
+        el("a", { class: "btn small", href: "#account" }, t("nav.account")))));
+  }
 }
 function renderTicker() {
   const tk = clear($("ticker"));
   const ref = S.price && S.price.ref;
   const now = Date.now(), next = C.sweepTime(C.nextSweep(now));
   tk.append(
-    el("span", {}, el("span", { class: "dot " + (S.live ? "good" : S.live === false ? "bad" : "") }), " ", S.live ? t("tk.live") : S.live === false ? t("tk.late") : t("tk.checking")),
+    // after the lock the referee may stop posting; "late" would only alarm people
+    ...(ended() ? [] : [el("span", {}, el("span", { class: "dot " + (S.live ? "good" : S.live === false ? "bad" : "") }), " ", S.live ? t("tk.live") : S.live === false ? t("tk.late") : t("tk.checking"))]),
     el("span", {}, "NVDA ", el("b", { class: "num" }, S.hl ? "$" + fmt(S.hl.px) : "–")),
     el("span", {}, t("tk.ref") + " ", el("b", { class: "num" }, ref ? fmt(ref.px) : "–"), S.price && S.price.limits ? el("span", { class: "num ltr" }, ` [${S.price.limits[0]} – ${S.price.limits[1]}]`) : ""),
-    el("span", {}, t("tk.next") + " ", el("b", { class: "num", id: "tk-next" }, dur(next - now))),
-    el("span", {}, t("tk.lock") + " ", el("b", { class: "num", id: "tk-lock" }, dur(C.sweepTime(C.LOCK_SWEEP) - now))),
+    ...(ended() ? [el("span", {}, el("b", {}, t("end.short")))]
+      : [el("span", {}, t("tk.next") + " ", el("b", { class: "num", id: "tk-next" }, dur(next - now))),
+        el("span", {}, t("tk.lock") + " ", el("b", { class: "num", id: "tk-lock" }, dur(C.sweepTime(C.LOCK_SWEEP) - now)))]),
   );
 }
 function renderWallet() {
@@ -739,7 +752,9 @@ async function accountMenu() {
 function statusNode(ok, text) { return el("span", { class: "status" + (ok ? " ok" : "") }, ok ? "✓ " + text : text); }
 
 function renderStart() {
-  $("start-lock").textContent = dur(C.sweepTime(C.LOCK_SWEEP) - Date.now());
+  $("start-lock").textContent = ended() ? t("end.tile") : dur(C.sweepTime(C.LOCK_SWEEP) - Date.now());
+  const lockFoot = $("start-lock").nextElementSibling;
+  if (lockFoot) lockFoot.textContent = ended() ? t("end.tilefoot") : t("start.f4b");
   // step 1
   const s1 = clear($("s1-body")), s1s = clear($("s1-status"));
   $("step-key").classList.toggle("done", !!(S.signer || S.watchDid));
@@ -786,6 +801,9 @@ function renderStart() {
     s2s.append(statusNode(true, t("s2.done")));
     s2.append(el("p", { class: "muted" }, e && e.seq ? t("s2.posted", { seq: e.seq, sweep: e.sweep ?? "–" }) : t("s2.marked")),
       el("div", { class: "callout info" }, t("s2.mintnote")));
+  } else if (ended()) {
+    s2s.append(statusNode(false, t("end.regclosed")));
+    s2.append(el("p", { class: "hint" }, t("end.regdesc")));
   } else {
     s2s.append(statusNode(false, t("s2.todo")));
     const go = el("button", { class: "btn primary", type: "button" }, t("s2.go"));
@@ -798,12 +816,17 @@ function renderStart() {
   const traded = journal().some((x) => x.kind === "offer" || x.kind === "trade");
   $("step-trade").classList.toggle("done", traded && !!who);
   $("step-trade").classList.toggle("locked", !reg || !who);
-  clear($("s3-status")).append(statusNode(traded, traded ? t("s3.done") : t("s3.todo")));
+  clear($("s3-status")).append(statusNode(traded, traded ? t("s3.done") : ended() ? t("end.tradeclosed") : t("s3.todo")));
 }
 
 // ---- rendering: trade --------------------------------------------------------------------
 function renderOfferForm() {
   const box = clear($("offer-form"));
+  if (ended()) {
+    box.append(el("h2", {}, t("end.tradeclosed")), el("p", { class: "muted" }, t("end.tradedesc")),
+      el("a", { class: "btn", href: "#account" }, t("nav.account")));
+    return;
+  }
   const f = S.form, r = refC();
   if (!f.px && r) f.px = C.fromCents(r);
   const book = accountBook(), cash = book.grant ? book.freeC : C.MINT_CENTS;
@@ -873,7 +896,8 @@ function bookRow(o, me) {
   const mine = o.terms.maker === me, youSide = o.terms.side === "buy" ? "sell" : "buy";
   const action = mine
     ? el("span", {}, el("span", { class: "badge ok" }, t("bk.yours")), " ", el("button", { class: "btn small ghost", type: "button", onclick: () => shareModal(o.terms) }, t("bk.share")))
-    : el("button", { class: "btn small " + youSide, type: "button", onclick: () => acceptOffer(o), disabled: !(S.signer || S.watchDid) }, youSide === "buy" ? t("bk.buyfrom") : t("bk.sellto"));
+    : ended() ? ""
+      : el("button", { class: "btn small " + youSide, type: "button", onclick: () => acceptOffer(o), disabled: !(S.signer || S.watchDid) }, youSide === "buy" ? t("bk.buyfrom") : t("bk.sellto"));
   return el("tr", { class: mine ? "mine-row" : null },
     el("td", { class: "num px" }, fmt(pxOf(o))), el("td", { class: "r num" }, o.terms.qty),
     el("td", { class: "num" }, dur(C.sweepTime(o.terms.until) - Date.now())), el("td", {}, didEl(o.terms.maker)), el("td", { class: "r" }, action));
@@ -1357,6 +1381,7 @@ function renderStartLeader() {
   const n = $("start-leader"); if (!n) return;
   const top = S.leaders && Array.isArray(S.leaders.top) ? S.leaders.top : [];
   n.textContent = top.length ? (Number(top[0][1]) >= 0 ? "+" : "") + fmt(top[0][1]) + " POLF" : "–";
+  if (n.nextElementSibling) n.nextElementSibling.textContent = ended() ? t("end.leader") : t("start.f5b");
 }
 function renderLeaders() {
   if (S.view !== "leaders") return;
@@ -1472,7 +1497,7 @@ async function boot() {
     const a = document.getElementById("tk-next"), b = document.getElementById("tk-lock");
     if (a) a.textContent = dur(C.sweepTime(C.nextSweep(now)) - now);
     if (b) b.textContent = dur(C.sweepTime(C.LOCK_SWEEP) - now);
-    const sl = $("start-lock"); if (sl) sl.textContent = dur(C.sweepTime(C.LOCK_SWEEP) - now);
+    const sl = $("start-lock"); if (sl && !ended()) sl.textContent = dur(C.sweepTime(C.LOCK_SWEEP) - now);
   }, 1000);
   setInterval(() => { if (!document.hidden) loadTicker(); }, 30_000);
   setInterval(() => { if (!document.hidden && S.view === "trade") loadDesk(); }, 20_000);

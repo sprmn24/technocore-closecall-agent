@@ -439,5 +439,15 @@ export default {
  "sh.later": "İstersen daha sonra anahtarını bu tarayıcıya yükleyip burada tek tıkla da imzalayabilirsin.",
  "bal.unknown": "Bu tarayıcıda bu DID'in kaydına dair bir iz yok. Hakem kimin kayıt olduğunu yayınlamıyor; site yalnızca burada imzalananları bilir. DID'ini zaten kaydettiysen (başka bir cihazda, başka bir adreste ya da terminalde) aşağıdan işaretle, bakiyen görünsün.",
  "bal.grantassumed": "Hakemden +10.000 POLF. Bu DID'in işlemleri var, yani kayıtlı; kayıt bu tarayıcının dışında yapılmış.",
- "dm.registered": "Bu DID yarışmaya zaten kayıtlı (terminalimden ya da başka bir cihazdan)"
+ "dm.registered": "Bu DID yarışmaya zaten kayıtlı (terminalimden ya da başka bir cihazdan)",
+ "end.title": "Close Call sona erdi",
+ "end.desc": "İşlemler 4 Ekim 09:00 UTC'de kilitlendi. Hakemin en son sıralaması Liderlik'te; bakiyen ve hesap dökümün Hesabım'da duruyor. Kurtarma dosyanı sakla: ödüller daha sonra bu anahtarla talep edilecek.",
+ "end.short": "Yarışma bitti",
+ "end.tile": "Bitti",
+ "end.tilefoot": "işlemler 4 Ekim'de kilitlendi",
+ "end.regclosed": "Kayıt kapandı",
+ "end.regdesc": "Yarışma bittiği için yeni anahtarlar artık kayıt olamaz. Yine de burada DID oluşturup Technocore için saklayabilirsin.",
+ "end.tradeclosed": "İşlemler kapandı",
+ "end.tradedesc": "İşlemler 4 Ekim 09:00 UTC'de kilitlendi; yeni teklif ve işlemler sayılmaz. Bakiyen, hesap dökümün ve final pozisyonun Hesabım'da duruyor.",
+ "end.leader": "en son sıralamada lider"
 };

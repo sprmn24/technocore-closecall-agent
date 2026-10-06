@@ -439,5 +439,15 @@ export default {
  "sh.later": "You can also load your key into this browser later, to sign here with one click.",
  "bal.unknown": "This browser has no record of this DID's registration. The referee doesn't publish who registered, so the site only knows what was signed here. If you already registered it (on another device, at another address or in your terminal), mark it below and your balance appears.",
  "bal.grantassumed": "+10,000 POLF from the referee. This DID has trades, so it is registered; it was registered outside this browser.",
- "dm.registered": "This DID is already registered for the contest (in my terminal or on another device)"
+ "dm.registered": "This DID is already registered for the contest (in my terminal or on another device)",
+ "end.title": "Close Call has ended",
+ "end.desc": "Trading locked on 4 October at 09:00 UTC. The referee's latest standings are on Leaderboard, and your balance and statement stay in My account. Keep your recovery file: prizes are claimed later with this same key.",
+ "end.short": "Contest ended",
+ "end.tile": "Ended",
+ "end.tilefoot": "trading locked on 4 October",
+ "end.regclosed": "Registration closed",
+ "end.regdesc": "The contest is over, so new keys can no longer register for it. You can still create a DID here and keep it for Technocore.",
+ "end.tradeclosed": "Trading closed",
+ "end.tradedesc": "Trading locked on 4 October at 09:00 UTC; no new offers or trades count. Your balance, statement and final position stay in My account.",
+ "end.leader": "leader in the latest standings"
 };

@@ -439,5 +439,15 @@ export default {
  "sh.later": "Vous pourrez aussi charger votre clé dans ce navigateur plus tard, pour signer ici en un clic.",
  "bal.unknown": "Ce navigateur n'a aucune trace de l'inscription de ce DID. L'arbitre ne publie pas qui s'est inscrit : le site ne connaît que ce qui a été signé ici. Si vous l'avez déjà inscrit (sur un autre appareil, à une autre adresse ou dans votre terminal), indiquez-le ci-dessous et votre solde apparaîtra.",
  "bal.grantassumed": "+10 000 POLF de l'arbitre. Ce DID a des échanges, il est donc inscrit ; l'inscription a été faite hors de ce navigateur.",
- "dm.registered": "Ce DID est déjà inscrit au concours (dans mon terminal ou sur un autre appareil)"
+ "dm.registered": "Ce DID est déjà inscrit au concours (dans mon terminal ou sur un autre appareil)",
+ "end.title": "Close Call est terminé",
+ "end.desc": "Les échanges ont été verrouillés le 4 octobre à 09:00 UTC. Le dernier classement de l'arbitre est dans Classement ; votre solde et votre relevé restent dans Mon compte. Gardez votre fichier de récupération : les prix seront réclamés plus tard avec cette même clé.",
+ "end.short": "Concours terminé",
+ "end.tile": "Terminé",
+ "end.tilefoot": "échanges verrouillés le 4 octobre",
+ "end.regclosed": "Inscriptions fermées",
+ "end.regdesc": "Le concours est terminé : les nouvelles clés ne peuvent plus s'y inscrire. Vous pouvez toujours créer un DID ici et le garder pour Technocore.",
+ "end.tradeclosed": "Échanges fermés",
+ "end.tradedesc": "Les échanges ont été verrouillés le 4 octobre à 09:00 UTC ; plus aucune offre ni aucun échange ne compte. Votre solde, votre relevé et votre position finale restent dans Mon compte.",
+ "end.leader": "en tête du dernier classement"
 };

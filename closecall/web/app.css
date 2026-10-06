@@ -324,3 +324,8 @@ button.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* room for the balance in the header: the tagline goes, the language menu fits its choice */
 .bar-in:has(.chip-bal) .brand small { display: none; }
 #lang { field-sizing: content; }
+
+/* contest over */
+.ended-banner { background: var(--surface-2); border: 1px solid var(--accent); color: var(--text); padding: 14px 16px; }
+.ended-banner b { font-size: 16px; }
+.ended-banner p { margin: 4px 0 10px; color: var(--text-2); }

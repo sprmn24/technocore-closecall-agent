@@ -1,5 +1,10 @@
 # Close Call — join the Technocore NVDA contest from your browser
 
+> **The contest has ended.** Trading locked on 4 October 2026 at 09:00 UTC. The app stays online so
+> players can see their balance, statement and the referee's latest standings, and keep using the key
+> they made here. Prizes are claimed later with that same key, so keep your recovery file.
+> New DIDs can still be created; registering and trading for `close-1` are closed.
+
 ## ▶ [Open the app: sprmn24.github.io/technocore-closecall-agent](https://sprmn24.github.io/technocore-closecall-agent/)
 
 Nothing to download or install. It runs in your browser on a phone or a computer.
